@@ -1,0 +1,10 @@
+[package]
+name = "xlibgib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ctor = "0.4.1"
+
+[lib]
+crate-type = ["cdylib"]
