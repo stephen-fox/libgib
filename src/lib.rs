@@ -1,18 +1,22 @@
+use core::ffi::{c_char, c_void};
+
 use std::{
     error::Error,
-    ffi::{c_char, c_int, c_void, CString},
     process::{exit, id},
-    ptr::null_mut,
 };
 
 use ctor::ctor;
+
 use mem::mem::{use_memory, Prot};
 
 mod mem;
 
-// TODO: Try building a static library
+use rsbmalloc::page_allocator;
 
-static mut FGETS_PTR: Option<fn(*mut c_void, isize, *mut c_void) -> *mut c_void> = None;
+#[global_allocator]
+static ALLOCATOR: page_allocator::PageAllocator = page_allocator::PageAllocator {};
+
+static mut FGETS_PTR: Option<fn(*mut c_void, isize, *mut c_void) -> *mut c_char> = None;
 static mut MALLOC_PTR: Option<fn(usize) -> *mut c_void> = None;
 
 #[ctor]
@@ -32,18 +36,28 @@ fn on_load_with_err() -> Result<(), Box<dyn Error>> {
 
     eprintln!("DEBUG({}): loading...", id());
 
-    let self_dl = match Dl::open(None) {
-        Ok(h) => h,
-        Err(err) => return Err(format!("dlopen self failed - {err}"))?,
+    let objects = match unsafe { mmor::objects() } {
+        Ok(objs) => objs,
+        Err(err) => return Err(format!("failed to get memory-mapped objects - {err}"))?,
     };
 
-    let exe_addr = unsafe { read_ptr(self_dl.handle()) };
+    let exe_addr = match objects
+        .iter()
+        .find(|obj| obj.name.as_ref().is_some_and(|name| name.is_empty()))
+    {
+        Some(o) => o.addr,
+        None => return Err("failed to find exe in memory-mapped objects".into()),
+    };
+
+    for object in objects {
+        eprintln!("DEBUG: object: 0x{:?} -> 0x{:x?}", object.name, object.addr)
+    }
 
     let got_addr = exe_addr + 0x3f58;
 
     let got = got_addr as *mut c_void;
 
-    eprintln!("exe: 0x{:x?} | got: 0x{:x?}", exe_addr, got_addr);
+    eprintln!("DEBUG: exe: 0x{:x?} | got: 0x{:x?}", exe_addr, got_addr);
 
     // 0x3f58 - 0x4000  .got
     match unsafe {
@@ -58,18 +72,21 @@ fn on_load_with_err() -> Result<(), Box<dyn Error>> {
             },
             |addr| {
                 // malloc = got + 0x50.
-                let malloc_entry = addr.add(0x50);
+                let malloc = swap_got_entry("malloc", addr, 0x50, fake_malloc as *mut c_void);
 
-                let malloc_addr = read_ptr(malloc_entry);
+                match dlrkit::sym_by_addr(malloc.addr()) {
+                    Ok(i) => {
+                        eprintln!("DEBUG: got info: {i}");
+                    }
+                    Err(err) => eprintln!("failed to dladdr malloc entry - {err}"),
+                }
 
-                let our_malloc = fake_malloc as *mut c_void;
+                MALLOC_PTR = Some(std::mem::transmute_copy(&malloc));
 
-                eprintln!(
-                    "rewrite malloc entry: 0x{:x?} -> 0x{:x?}",
-                    malloc_addr, our_malloc
-                );
+                // fgets = got + 0x40.
+                let fgets = swap_got_entry("fgets", addr, 0x40, fake_fgets as *mut c_void);
 
-                write_ptr(our_malloc, malloc_entry);
+                FGETS_PTR = Some(std::mem::transmute_copy(&fgets));
             },
         )
     } {
@@ -82,31 +99,40 @@ fn on_load_with_err() -> Result<(), Box<dyn Error>> {
     // let mut iterator = stdin.lock().lines();
     // iterator.next().unwrap().unwrap();
 
-    let libc_so = match Dl::open(Some("libc.so.6")) {
-        Ok(h) => h,
-        Err(err) => return Err(format!("dlopen libc failed - {err}"))?,
-    };
-
-    match libc_so.sym("fgets") {
-        Ok(f) => unsafe { FGETS_PTR = Some(f) },
-        Err(err) => return Err(format!("dlsym fgets failed - {err}"))?,
-    };
-
-    match libc_so.sym("malloc") {
-        Ok(f) => unsafe { MALLOC_PTR = Some(f) },
-        Err(err) => return Err(format!("dlsym fgets failed - {err}"))?,
-    };
-
-    eprintln!("DEBUG({}): load done", id());
+    eprintln!("DEBUG: load done");
 
     Ok(())
 }
 
-unsafe fn read_ptr(at: *mut c_void) -> usize {
+unsafe fn swap_got_entry(
+    name: &str,
+    got_addr: *mut c_void,
+    offset: usize,
+    with: *mut c_void,
+) -> *mut c_void {
+    let got_entry = got_addr.add(offset);
+
+    let c_fn_addr = read_ptr(got_entry);
+
+    let fn_ptr = c_fn_addr as *mut c_void;
+
+    let our_fake_fn = with;
+
+    eprintln!(
+        "DEBUG: rewrite {} entry: 0x{:x?} -> 0x{:x?}",
+        name, c_fn_addr, our_fake_fn
+    );
+
+    write_ptr(our_fake_fn, got_entry);
+
+    fn_ptr
+}
+
+unsafe fn read_ptr(from: *mut c_void) -> usize {
     let mut addr_bytes: [u8; 8] = [0; 8];
 
     unsafe {
-        std::ptr::copy_nonoverlapping(at as *mut u8, addr_bytes.as_mut_ptr(), addr_bytes.len())
+        std::ptr::copy_nonoverlapping(from as *mut u8, addr_bytes.as_mut_ptr(), addr_bytes.len())
     };
 
     u64::from_le_bytes(addr_bytes) as usize
@@ -120,106 +146,31 @@ unsafe fn write_ptr(pointer: *mut c_void, to: *mut c_void) {
     };
 }
 
-#[unsafe(no_mangle)]
-extern "C" fn fgets(s: *mut c_void, size: isize, stream: *mut c_void) -> *mut c_void {
+extern "C" fn fake_fgets(s: *mut c_void, size: isize, stream: *mut c_void) -> *mut c_char {
+    eprintln!(
+        "DEBUG: enter fgets(0x{:x?}, {}, 0x{:?})...",
+        s.addr(),
+        size,
+        stream.addr(),
+    );
+
     let f = unsafe { FGETS_PTR.unwrap() };
 
-    eprintln!("DEBUG({}): fgets: 0x{:x?} | {}", id(), s.addr(), size);
+    let result = f(s, size, stream);
 
-    f(s, size, stream)
-}
-
-extern "C" fn fake_malloc(size: usize) -> *mut c_void {
-    let f = unsafe { MALLOC_PTR.unwrap() };
-
-    let result = f(size);
-
-    eprintln!(
-        "DEBUG({}): malloc: 0x{:x?} ({}) -> 0x{:x?}",
-        id(),
-        size,
-        size,
-        result.addr()
-    );
+    eprintln!("DEBUG: exit fgets() -> 0x{:x?}", result.addr());
 
     result
 }
 
-const RTLD_NOW: c_int = 0x2;
+extern "C" fn fake_malloc(size: usize) -> *mut c_void {
+    eprintln!("DEBUG: enter malloc(0x{:x?})", size);
 
-unsafe extern "C" {
-    pub fn dlopen(filename: *const c_char, flag: c_int) -> *mut c_void;
+    let f = unsafe { MALLOC_PTR.unwrap() };
 
-    pub fn dlerror() -> *mut c_char;
+    let result = f(size);
 
-    pub fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+    eprintln!("DEBUG: exit malloc() -> 0x{:x?}", result.addr());
 
-    pub fn dlclose(handle: *mut c_void) -> c_int;
-}
-
-struct Dl {
-    hnd: *mut c_void,
-}
-
-impl Dl {
-    fn open(filename: Option<&str>) -> Result<Self, Box<dyn Error>> {
-        match do_dlopen(filename) {
-            Ok(handle) => Ok(Self { hnd: handle }),
-            Err(err) => Err(err),
-        }
-    }
-
-    fn handle(&self) -> *mut c_void {
-        self.hnd
-    }
-
-    fn sym<T>(&self, symbol: &str) -> Result<T, Box<dyn Error>> {
-        let symbol = CString::new(symbol)?;
-
-        let sym_ptr = unsafe { dlsym(self.hnd, symbol.as_ptr()) };
-
-        if sym_ptr.is_null() {
-            match last_dlerror() {
-                Some(err_msg) => return Err(err_msg)?,
-                None => return Err("dlsym failed without any error (dlerror returned null)".into()),
-            }
-        }
-
-        // Based on work by Chayim Friedman:
-        // https://stackoverflow.com/a/71373744
-        let sym_transmute = unsafe { std::mem::transmute_copy(&sym_ptr) };
-
-        Ok(sym_transmute)
-    }
-}
-
-fn do_dlopen(filename: Option<&str>) -> Result<*mut c_void, Box<dyn Error>> {
-    let handle = match filename {
-        Some(p) => {
-            let path = CString::new(p)?;
-            unsafe { dlopen(path.as_ptr(), RTLD_NOW) }
-        }
-        None => unsafe { dlopen(null_mut(), RTLD_NOW) },
-    };
-
-    if handle.is_null() {
-        match last_dlerror() {
-            Some(err_msg) => return Err(err_msg)?,
-            None => return Err("dlopen failed without any error (dlerror returned null)".into()),
-        }
-    }
-
-    Ok(handle)
-}
-
-fn last_dlerror() -> Option<String> {
-    let err_ptr = unsafe { dlerror() };
-    if err_ptr.is_null() {
-        return None;
-    }
-
-    match unsafe { CString::from_raw(err_ptr).into_string() } {
-        Ok(str) => Some(str),
-        Err(_) => Some("failed to convert error into string".into()),
-    }
+    result
 }

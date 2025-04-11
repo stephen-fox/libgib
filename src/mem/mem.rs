@@ -220,11 +220,12 @@ fn align_to<P>(pointer: *mut P, bits: usize, chunk_size: usize) -> AlignToOutput
 
 #[cfg(not(target_os = "windows"))]
 mod mem_unix {
-    use std::{
-        error::Error,
+    use core::{
         ffi::{c_int, c_void},
         ptr::null_mut,
     };
+
+    use std::error::Error;
 
     use super::{last_error, AllocFlags, Prot, ProtectResult};
 
@@ -313,7 +314,12 @@ mod mem_unix {
 mod mem_windows {
     // PAGE_PROTECTION_FLAGS = u32
 
-    use std::{error::Error, ffi::c_void, ptr::null_mut};
+    use core::{
+        ffi::{c_int, c_void},
+        ptr::null_mut,
+    };
+
+    use std::error::Error;
 
     use super::{last_error, AllocFlags, Prot, ProtectResult};
 
