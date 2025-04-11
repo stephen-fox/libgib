@@ -7,9 +7,7 @@ use std::{
 
 use ctor::ctor;
 
-use mem::mem::{use_memory, Prot};
-
-mod mem;
+use mrevise::{use_memory, Prot};
 
 use rsbmalloc::page_allocator;
 
@@ -63,7 +61,7 @@ fn on_load_with_err() -> Result<(), Box<dyn Error>> {
     match unsafe {
         use_memory(
             got,
-            mem::mem::MemAttrs {
+            mrevise::MemAttrs {
                 length: 0x4000 - 0x3f58,
                 align_to: Some(4096),
                 prot_during: Some(Prot::ReadWrite),
