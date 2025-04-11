@@ -84,6 +84,8 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 [[package]]
 name = "rsbmalloc"
 version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a9135b38f3a945030f98bc68c7c674af39199e7146a3f94cd4acd10067df723"
 dependencies = [
  "lazy_static",
  "libc",

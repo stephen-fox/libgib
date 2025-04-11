@@ -7,7 +7,7 @@ edition = "2021"
 ctor = "0.4.1"
 dlrkit = { version = "0.1.0", path = "dlrkit" }
 mmor = { version = "0.1.0", path = "mmor" }
-rsbmalloc = { version = "0.4.4", path = "rsbmalloc/rust-alloc" }
+rsbmalloc = "0.4.4"
 
 [lib]
 crate-type = ["cdylib"]
