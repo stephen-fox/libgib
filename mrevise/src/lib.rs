@@ -57,6 +57,7 @@ pub struct MemAttrs {
 }
 
 pub enum Prot {
+    None,
     Read,
     ReadWrite,
     ReadWriteExecute,
@@ -66,6 +67,7 @@ pub enum Prot {
 impl std::fmt::Display for Prot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
+            Prot::None => "none",
             Prot::Read => "read",
             Prot::ReadWrite => "read-write",
             Prot::ReadWriteExecute => "read-write-execute",
@@ -74,11 +76,6 @@ impl std::fmt::Display for Prot {
 
         write!(f, "{s}")
     }
-}
-
-pub enum AllocFlags {
-    Default,
-    Custom(u64),
 }
 
 /// Attempts to apply virtual protect READ/WRITE access
@@ -148,7 +145,7 @@ where
     match protect(protect_ptr, chunk_size, final_prot, None) {
         Ok(_) => Ok(()),
         Err(err) => return Err(format!(
-            "failed to restore memory region protection at  0x{:x?} (orig: 0x{:x?}) length 0x{:x?} (orig: 0x{:x?}) - {}",
+            "failed to restore memory region protection at 0x{:x?} (orig: 0x{:x?}) length 0x{:x?} (orig: 0x{:x?}) - {}",
             protect_ptr.addr(),
             pointer.addr(),
             chunk_size,
@@ -174,17 +171,37 @@ pub fn protect<P>(
         chunk_size = adjustment.size_to_modify;
     }
 
-    #[cfg(not(target_os = "windows"))]
-    let result = mem_unix::protect(target_ptr, chunk_size, prot);
+    #[cfg(unix)]
+    let result = unix::protect(target_ptr, chunk_size, prot);
 
     #[cfg(target_os = "windows")]
-    let result = mem_windows::protect(target_ptr, chunk_size, prot);
+    let result = windows::protect(target_ptr, chunk_size, prot);
 
     result
 }
 
 pub struct ProtectResult {
     pub old: Option<u32>,
+}
+
+pub enum AllocFlags {
+    Default,
+    Custom(u64),
+}
+
+pub fn alloc<P>(
+    addr: Option<*mut P>,
+    length: usize,
+    prot: Prot,
+    flags: AllocFlags,
+) -> Result<*mut P, Box<dyn Error>> {
+    #[cfg(unix)]
+    let result = unix::alloc(addr, length, prot, flags);
+
+    #[cfg(windows)]
+    let result = windows::alloc(addr, length, prot, flags);
+
+    result
 }
 
 struct AlignToOutput<P> {
@@ -216,8 +233,8 @@ fn align_to<P>(pointer: *mut P, bits: usize, chunk_size: usize) -> AlignToOutput
     }
 }
 
-#[cfg(not(target_os = "windows"))]
-mod mem_unix {
+#[cfg(unix)]
+mod unix {
     use core::{
         ffi::{c_int, c_void},
         ptr::null_mut,
@@ -258,6 +275,7 @@ mod mem_unix {
         prot: Prot,
     ) -> Result<ProtectResult, Box<dyn Error>> {
         let c_prot: c_int = match prot {
+            Prot::None => PROT_NONE,
             Prot::Read => PROT_READ,
             Prot::ReadWrite => PROT_READ | PROT_WRITE,
             Prot::ReadWriteExecute => PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -300,6 +318,7 @@ mod mem_unix {
 
     fn prot_to_unix_const(prot: Prot) -> c_int {
         match prot {
+            Prot::None => PROT_NONE,
             Prot::Read => PROT_READ,
             Prot::ReadWrite => PROT_READ | PROT_WRITE,
             Prot::ReadWriteExecute => PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -309,7 +328,7 @@ mod mem_unix {
 }
 
 #[cfg(target_os = "windows")]
-mod mem_windows {
+mod windows {
     // PAGE_PROTECTION_FLAGS = u32
 
     use core::{
@@ -387,7 +406,9 @@ mod mem_windows {
     }
 
     fn prot_to_windows_const(prot: Prot) -> u32 {
+        // https://learn.microsoft.com/en-us/windows/win32/Memory/memory-protection-constants
         match prot {
+            Prot::None => 0x01,             // PAGE_NOACCESS
             Prot::Read => 0x02,             // PAGE_READONLY
             Prot::ReadWrite => 0x04,        // PAGE_READWRITE
             Prot::ReadWriteExecute => 0x40, // PAGE_EXECUTE_READWRITE
