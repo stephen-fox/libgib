@@ -1,4 +1,5 @@
 use core::ffi::{c_int, c_void};
+use core::ptr::null_mut;
 
 use std::error::Error;
 
@@ -34,6 +35,10 @@ impl std::fmt::Display for SymInfo {
     }
 }
 
+pub enum Mode {
+    Custom(u32)
+}
+
 pub struct Dl {
     hnd: *mut c_void,
 }
@@ -41,8 +46,6 @@ pub struct Dl {
 // Full Windows example:
 // https://learn.microsoft.com/en-us/windows/win32/dlls/using-run-time-dynamic-linking
 impl Dl {
-    // TODO: Windows support, see LoadLibraryEx:
-    // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexa
     pub unsafe fn open(file: Option<&str>) -> Result<Self, Box<dyn Error>> {
         unsafe {
             #[cfg(unix)]
@@ -50,9 +53,16 @@ impl Dl {
                 Ok(handle) => Ok(Self { hnd: handle }),
                 Err(err) => Err(err),
             }
+
+            #[cfg(windows)]
+            match windows::load_library_exw(file, null_mut(), 0) {
+                Ok(handle) => Ok(Self { hnd: handle }),
+                Err(err) => Err(err),
+            }
         }
     }
 
+    // TODO: windows support
     #[cfg(unix)]
     pub unsafe fn open_mode(file: Option<&str>, mode: c_int) -> Result<Self, Box<dyn Error>> {
         unsafe {
@@ -67,21 +77,27 @@ impl Dl {
         self.hnd
     }
 
-    // TODO: Windows support, see GetProcAddress:
-    // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress
     pub unsafe fn sym<T>(&self, symbol: &str) -> Result<T, Box<dyn Error>> {
+        #[cfg(unix)]
         unsafe {
-            #[cfg(unix)]
             unix::do_dlsym_transmute::<T>(self.hnd, symbol)
+        }
+
+        #[cfg(windows)]
+        unsafe {
+            windows::get_proc_address_transmute::<T>(self.hnd, symbol)
         }
     }
 
-    // TODO: Windows support, see FreeLibrary:
-    // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-freelibrary
     pub unsafe fn close(self) -> Result<(), Box<dyn Error>> {
+        #[cfg(unix)]
         unsafe {
-            #[cfg(unix)]
             unix::do_dlclose(self.hnd)
+        }
+
+        #[cfg(windows)]
+        unsafe {
+            windows::free_library(self.hnd)
         }
     }
 }
@@ -144,7 +160,7 @@ pub mod unix {
     #[cfg(target_os = "vxworks")]
     pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
 
-    unsafe extern "C" {
+    extern "C" {
         fn dlopen(file: *const c_char, mode: c_int) -> *mut c_void;
 
         fn dlerror() -> *mut c_char;
@@ -312,5 +328,80 @@ pub mod unix {
             Ok(str) => Some(str),
             Err(_) => Some("failed to convert error into string".into()),
         }
+    }
+}
+
+#[cfg(windows)]
+pub mod windows {
+    use core::ffi::c_void;
+    use core::ffi::c_char;
+    use std::error::Error;
+    use std::ffi::CString;
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LoadLibraryExW(lp_lib_file_name: *const u16, hfile: *mut c_void, dwflags: u32) -> *mut c_void;
+
+        //fn GetProcAddress(hModule: *mut c_void, lpProcName: *const c_char) -> Option<unsafe extern "system" fn() -> isize>;
+
+        fn GetProcAddress(hmodule: *mut c_void, lp_proc_name: *const c_char) -> *mut c_void;
+        fn FreeLibrary(hlibmodule: *mut c_void) -> bool;
+    }
+
+    pub unsafe fn load_library_exw(
+        lp_lib_file_name: Option<&str>,
+        hfile: *mut c_void,
+        dwflags: u32
+    ) -> Result<*mut c_void, Box<dyn Error>> {
+        if lp_lib_file_name.is_none() {
+            return Err("lp_lib_file_name is none")?;
+        }
+
+        let lp_lib_file_name = lp_lib_file_name.unwrap();
+
+        let mut lp_lib_file_name_utf16 = lp_lib_file_name.encode_utf16().collect::<Vec<_>>();
+        lp_lib_file_name_utf16.push(0);
+
+        let result = LoadLibraryExW(lp_lib_file_name_utf16.as_ptr(), hfile, dwflags);
+        if result.is_null() {
+            return Err(format!("load library failed - {}",std::io::Error::last_os_error()))?;
+        }
+
+        Ok(result)
+    }
+
+    pub unsafe fn get_proc_address_transmute<T>(
+        handle: *mut c_void,
+        symbol: &str,
+    ) -> Result<T, Box<dyn Error>> {
+        let sym_ptr = unsafe { get_proc_address(handle, symbol)? };
+
+        let sym_transmute = unsafe { std::mem::transmute_copy(&sym_ptr) };
+
+        Ok(sym_transmute)
+    }
+
+    pub unsafe fn get_proc_address(
+        hmodule: *mut c_void,
+        lp_proc_name: &str
+    ) -> Result<*mut c_void, Box<dyn Error>> {
+        let lp_proc_name = CString::new(lp_proc_name)?;
+
+        let result = GetProcAddress(hmodule, lp_proc_name.as_ptr());
+        if result.is_null() {
+            return Err(format!("get proc address failed - {}",std::io::Error::last_os_error()))?;
+        }
+
+        Ok(result)
+    }
+
+    pub unsafe fn free_library(
+        hmodule: *mut c_void,
+    ) -> Result< (), Box<dyn Error>> {
+        if !FreeLibrary(hmodule) {
+            return Err(format!("failed to free library - {}",std::io::Error::last_os_error()))?;
+        }
+
+        Ok(())
     }
 }
