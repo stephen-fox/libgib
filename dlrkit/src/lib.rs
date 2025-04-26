@@ -120,42 +120,55 @@ pub mod unix {
         }
     };
 
-    #[cfg(target_os = "fuchsia")]
-    pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
-    #[cfg(target_os = "aix")]
-    pub const RTLD_DEFAULT: *mut c_void = -1isize as *mut c_void;
-    #[cfg(any(target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))]
-    pub const RTLD_DEFAULT: *mut c_void = -2isize as *mut c_void;
-    #[cfg(target_os = "cygwin")]
-    pub const RTLD_DEFAULT: *mut c_void = 0isize as *mut c_void;
-    #[cfg(target_os = "haiku")]
-    pub const RTLD_DEFAULT: *mut c_void = 0isize as *mut c_void;
-    #[cfg(target_os = "hurd")]
-    pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
-    #[cfg(all(target_os = "android", target_pointer_width = "32"))]
-    pub const RTLD_DEFAULT: *mut c_void = -1isize as *mut c_void;
-    #[cfg(all(target_os = "android", target_pointer_width = "64"))]
-    pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
-    #[cfg(target_os = "emscripten")]
-    pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
-    #[cfg(target_os = "linux")]
-    pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
-    #[cfg(target_os = "horizon")]
-    pub const RTLD_DEFAULT: *mut c_void = 0 as *mut c_void;
-    #[cfg(target_os = "rtems")]
-    pub const RTLD_DEFAULT: *mut c_void = -2isize as *mut c_void;
-    #[cfg(target_os = "vita")]
-    pub const RTLD_DEFAULT: *mut c_void = 0 as *mut c_void;
-    #[cfg(target_os = "nto")]
-    pub const RTLD_DEFAULT: *mut c_void = -2i64 as *mut c_void;
-    #[cfg(target_os = "nuttx")]
-    pub const RTLD_DEFAULT: *mut c_void = 0 as *mut c_void;
-    #[cfg(target_os = "redox")]
-    pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
-    #[cfg(target_os = "solaris")]
-    pub const RTLD_DEFAULT: *mut c_void = -2isize as *mut c_void;
-    #[cfg(target_os = "vxworks")]
-    pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
+    // This constant's various values comes from
+    // the rust-lang/libc library.
+    pub const RTLD_DEFAULT: *mut c_void = {
+        if cfg!(target_os = "fuchsia") {
+            0i64 as *mut c_void
+        } else if cfg!(target_os = "aix") {
+            -1isize as *mut c_void
+        } else if cfg!(any(
+            target_os = "freebsd",
+            target_os = "netbsd",
+            target_os = "openbsd",
+            target_os = "ios",
+            target_os = "macos",
+            target_os = "tvos",
+            target_os = "visionos",
+        )) {
+            -2isize as *mut c_void
+        } else if cfg!(target_os = "haiku") {
+            0isize as *mut c_void
+        } else if cfg!(target_os = "hurd") {
+            0i64 as *mut c_void
+        } else if cfg!(all(target_os = "android", target_pointer_width = "32")) {
+            -1isize as *mut c_void
+        } else if cfg!(all(target_os = "android", target_pointer_width = "64")) {
+            0i64 as *mut c_void
+        } else if cfg!(target_os = "emscripten") {
+            0i64 as *mut c_void
+        } else if cfg!(target_os = "linux") {
+            0i64 as *mut c_void
+        } else if cfg!(target_os = "horizon") {
+            0 as *mut c_void
+        } else if cfg!(target_os = "rtems") {
+            -2isize as *mut c_void
+        } else if cfg!(target_os = "vita") {
+            0 as *mut c_void
+        } else if cfg!(target_os = "nto") {
+            -2i64 as *mut c_void
+        } else if cfg!(target_os = "nuttx") {
+            0 as *mut c_void
+        } else if cfg!(target_os = "redox") {
+            0i64 as *mut c_void
+        } else if cfg!(target_os = "solaris") {
+            -2isize as *mut c_void
+        } else if cfg!(target_os = "vxworks") {
+            0i64 as *mut c_void
+        } else {
+            0x00 as *mut c_void
+        }
+    };
 
     extern "C" {
         fn dlopen(file: *const c_char, mode: c_int) -> *mut c_void;
