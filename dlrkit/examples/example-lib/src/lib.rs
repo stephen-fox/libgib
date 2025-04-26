@@ -1,5 +1,5 @@
 #[no_mangle]
-extern "system" fn Add(left: u64, right: u64) -> u64 {
+fn add(left: u64, right: u64) -> u64 {
     left + right
 }
 
