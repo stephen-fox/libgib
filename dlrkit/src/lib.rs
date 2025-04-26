@@ -1,5 +1,4 @@
 use core::ffi::{c_int, c_void};
-use core::ptr::null_mut;
 
 use std::error::Error;
 
@@ -43,8 +42,6 @@ pub struct Dl {
     hnd: *mut c_void,
 }
 
-// Full Windows example:
-// https://learn.microsoft.com/en-us/windows/win32/dlls/using-run-time-dynamic-linking
 impl Dl {
     pub unsafe fn open(file: Option<&str>) -> Result<Self, Box<dyn Error>> {
         unsafe {
@@ -55,7 +52,7 @@ impl Dl {
             }
 
             #[cfg(windows)]
-            match windows::load_library_exw(file, null_mut(), 0) {
+            match windows::load_library_exw(file, core::ptr::null_mut(), 0) {
                 Ok(handle) => Ok(Self { hnd: handle }),
                 Err(err) => Err(err),
             }
