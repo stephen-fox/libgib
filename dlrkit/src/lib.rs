@@ -343,10 +343,8 @@ pub mod unix {
 
 #[cfg(windows)]
 pub mod windows {
-    use core::ffi::c_char;
-    use core::ffi::c_void;
-    use std::error::Error;
-    use std::ffi::CString;
+    use core::ffi::{c_char, c_void};
+    use std::{error::Error, ffi::CString};
 
     #[link(name = "kernel32")]
     extern "system" {
@@ -356,9 +354,8 @@ pub mod windows {
             dwflags: u32,
         ) -> *mut c_void;
 
-        //fn GetProcAddress(hModule: *mut c_void, lpProcName: *const c_char) -> Option<unsafe extern "system" fn() -> isize>;
-
         fn GetProcAddress(hmodule: *mut c_void, lp_proc_name: *const c_char) -> *mut c_void;
+
         fn FreeLibrary(hlibmodule: *mut c_void) -> bool;
     }
 
