@@ -44,30 +44,37 @@ pub struct Dl {
 
 impl Dl {
     pub unsafe fn open(file: Option<&str>) -> Result<Self, Box<dyn Error>> {
-        unsafe {
-            #[cfg(unix)]
-            match unix::do_dlopen(file, unix::RTLD_NOW) {
-                Ok(handle) => Ok(Self { hnd: handle }),
-                Err(err) => Err(err),
-            }
+        let result;
 
-            #[cfg(windows)]
-            match windows::load_library_exw(file, core::ptr::null_mut(), 0) {
-                Ok(handle) => Ok(Self { hnd: handle }),
-                Err(err) => Err(err),
-            }
+        #[cfg(unix)]
+        unsafe {
+            result = Dl::open_mode(file, unix::RTLD_NOW);
         }
+
+        #[cfg(windows)]
+        unsafe {
+            result = Dl::open_mode(file, 0);
+        }
+
+        result
     }
 
-    // TODO: windows support
-    #[cfg(unix)]
+    // TODO: Implement custom mode type.
+    // TODO: Fix mode arg.
     pub unsafe fn open_mode(file: Option<&str>, mode: c_int) -> Result<Self, Box<dyn Error>> {
+        let result;
+
+        #[cfg(unix)]
         unsafe {
-            match unix::do_dlopen(file, mode) {
-                Ok(handle) => Ok(Self { hnd: handle }),
-                Err(err) => Err(err),
-            }
+            result = unix::do_dlopen(file, mode);
         }
+
+        #[cfg(windows)]
+        unsafe {
+            result = windows::load_library_exw(file, core::ptr::null_mut(), mode as u32)
+        }
+
+        Ok(Self { hnd: result? })
     }
 
     pub unsafe fn handle(&self) -> *mut c_void {
