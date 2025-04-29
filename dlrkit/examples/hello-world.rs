@@ -11,9 +11,11 @@ const LIBRARY_PATH: &str = {
 fn main() -> Result<(), Box<dyn Error>> {
     let lib = unsafe { dlrkit::Dl::open(Some(LIBRARY_PATH))? };
 
-    let add: fn(left: u64, right: u64) -> u64 = unsafe { lib.sym("add")? };
+    let add = unsafe { lib.sym::<fn(left: u64, right: u64) -> u64>("add")? };
 
     eprintln!("add result: {}", add(62, 7));
+
+    unsafe { lib.close()? };
 
     Ok(())
 }

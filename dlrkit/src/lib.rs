@@ -1,6 +1,10 @@
 use core::ffi::{c_int, c_void};
 
-use std::error::Error;
+use std::{
+    error::Error,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 // TODO: Windows support, see GetModuleHandleExW:
 // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw
@@ -81,16 +85,20 @@ impl Dl {
         self.hnd
     }
 
-    pub unsafe fn sym<T>(&self, symbol: &str) -> Result<T, Box<dyn Error>> {
+    pub unsafe fn sym<T>(&self, symbol: &str) -> Result<Symbol<T>, Box<dyn Error>> {
+        let result;
+
         #[cfg(unix)]
         unsafe {
-            unix::do_dlsym_transmute::<T>(self.hnd, symbol)
+            result = unix::do_dlsym_transmute::<T>(self.hnd, symbol);
         }
 
         #[cfg(windows)]
         unsafe {
-            windows::get_proc_address_transmute::<T>(self.hnd, symbol)
+            result = windows::get_proc_address_transmute::<T>(self.hnd, symbol);
         }
+
+        Ok(Symbol::new(result?))
     }
 
     pub unsafe fn close(self) -> Result<(), Box<dyn Error>> {
@@ -105,6 +113,50 @@ impl Dl {
         }
     }
 }
+
+/// Safe wrapper around a symbol obtained from `Dl`.
+///
+/// This is the most generic type, valid for obtaining functions,
+/// references and pointers. It does not accept null value of
+/// the library symbol. Other types may provide more specialized
+/// functionality better for some use cases.
+///
+/// This originally appeared in the dlopen2 Rust library, maintained
+/// by OpenByteDev.
+///
+/// Copyright (c) 2017 Szymon Wieloch
+/// Copyright (C) 2019 Ahmed Masud <ahmed.masud@saf.ai>
+/// Copyright (C) 2022 OpenByte <development.openbyte@gmail.com>
+#[derive(Debug, Clone, Copy)]
+pub struct Symbol<'lib, T: 'lib> {
+    symbol: T,
+    pd: PhantomData<&'lib T>,
+}
+
+impl<'lib, T> Symbol<'lib, T> {
+    pub fn new(symbol: T) -> Symbol<'lib, T> {
+        Symbol {
+            symbol,
+            pd: PhantomData,
+        }
+    }
+}
+
+impl<'lib, T> Deref for Symbol<'lib, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.symbol
+    }
+}
+
+impl<'lib, T> DerefMut for Symbol<'lib, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.symbol
+    }
+}
+
+unsafe impl<'lib, T: Send> Send for Symbol<'lib, T> {}
+unsafe impl<'lib, T: Sync> Sync for Symbol<'lib, T> {}
 
 #[cfg(unix)]
 pub mod unix {
