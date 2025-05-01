@@ -46,6 +46,9 @@ pub struct Dl {
     hnd: *mut c_void,
 }
 
+unsafe impl Send for Dl {}
+unsafe impl Sync for Dl {}
+
 impl Dl {
     pub unsafe fn open(file: Option<&str>) -> Result<Self, Box<dyn Error>> {
         #[cfg(unix)]
