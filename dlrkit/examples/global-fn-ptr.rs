@@ -1,4 +1,4 @@
-use std::{error::Error, sync::OnceLock};
+use std::sync::OnceLock;
 
 const LIBRARY_PATH: &str = {
     if cfg!(target_os = "windows") {
@@ -10,30 +10,28 @@ const LIBRARY_PATH: &str = {
     }
 };
 
-type AddSignature = fn(left: u64, right: u64) -> u64;
-
 static LIB: OnceLock<dlrkit::Dl> = OnceLock::new();
 
 static ADD: OnceLock<dlrkit::Symbol<AddSignature>> = OnceLock::new();
 
-fn main() -> Result<(), Box<dyn Error>> {
-    do_add();
+type AddSignature = fn(left: u64, right: u64) -> u64;
 
-    Ok(())
+fn main() {
+    do_add();
 }
 
 fn do_add() {
     let add = ADD.get_or_init(|| load_add());
 
-    eprintln!("add: {}", add(67, 2));
-}
-
-fn load_library() -> dlrkit::Dl {
-    unsafe { dlrkit::Dl::open(Some(LIBRARY_PATH)).unwrap() }
+    eprintln!("add result: {}", add(67, 2));
 }
 
 fn load_add() -> dlrkit::Symbol<'static, AddSignature> {
     let lib = LIB.get_or_init(|| load_library());
 
     unsafe { lib.sym("add").unwrap() }
+}
+
+fn load_library() -> dlrkit::Dl {
+    unsafe { dlrkit::Dl::open(Some(LIBRARY_PATH)).unwrap() }
 }
