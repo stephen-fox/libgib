@@ -4,7 +4,7 @@ const LIBRARY_PATH: &str = {
     if cfg!(target_os = "windows") {
         "target\\debug\\deps\\example_lib.dll"
     } else if cfg!(any(target_os = "macos", target_os = "ios")) {
-        "target/debug/deps/libexample_lib.dylibAAAA"
+        "target/debug/deps/libexample_lib.dylib"
     } else {
         "target/debug/deps/libexample_lib.so"
     }
