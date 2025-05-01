@@ -161,7 +161,7 @@ unsafe impl<'lib, T: Sync> Sync for Symbol<'lib, T> {}
 #[cfg(unix)]
 pub mod unix {
     use core::{
-        ffi::{c_char, c_int, c_void},
+        ffi::{c_char, c_int, c_void, CStr},
         ptr::{null, null_mut},
     };
 
@@ -264,9 +264,7 @@ pub mod unix {
             return String::from("");
         }
 
-        let cs = unsafe { CString::from_raw(p.cast_mut()) };
-
-        cs.into_string().unwrap_or_default()
+        unsafe { CStr::from_ptr(p).to_string_lossy().to_string() }
     }
 
     pub unsafe fn do_dlopen(
@@ -393,10 +391,7 @@ pub mod unix {
             return None;
         }
 
-        match unsafe { CString::from_raw(err_ptr).into_string() } {
-            Ok(str) => Some(str),
-            Err(_) => Some("failed to convert error into string".into()),
-        }
+        Some(CStr::from_ptr(err_ptr).to_string_lossy().to_string())
     }
 }
 
