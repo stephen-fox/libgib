@@ -48,19 +48,15 @@ pub struct Dl {
 
 impl Dl {
     pub unsafe fn open(file: Option<&str>) -> Result<Self, Box<dyn Error>> {
-        let result;
-
         #[cfg(unix)]
         unsafe {
-            result = Dl::open_mode(file, unix::RTLD_NOW);
+            Dl::open_mode(file, unix::RTLD_NOW)
         }
 
         #[cfg(windows)]
         unsafe {
-            result = Dl::open_mode(file, 0);
+            Dl::open_mode(file, 0)
         }
-
-        result
     }
 
     // TODO: Implement custom mode type.
