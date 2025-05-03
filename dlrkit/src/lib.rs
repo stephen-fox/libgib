@@ -84,20 +84,36 @@ impl Dl {
         self.hnd
     }
 
-    pub unsafe fn sym<T>(&self, symbol: &str) -> Result<Symbol<T>, Box<dyn Error>> {
+    pub unsafe fn sym<T>(&self, symbol_name: &str) -> Result<Symbol<T>, Box<dyn Error>> {
+        // This check comes from dlopen2. It ensures that T is
+        // the same size as a pointer.
+        //
+        // Copyright (c) 2017 Szymon Wieloch
+        // Copyright (C) 2019 Ahmed Masud <ahmed.masud@saf.ai>
+        // Copyright (C) 2022 OpenByte <development.openbyte@gmail.com>
+        if size_of::<T>() != size_of::<*mut ()>() {
+            panic!("type T has a different size than a pointer");
+        }
+
         let result;
 
         #[cfg(unix)]
         unsafe {
-            result = unix::do_dlsym_transmute::<T>(self.hnd, symbol);
+            result = unix::do_dlsym(self.hnd, symbol_name);
         }
 
         #[cfg(windows)]
         unsafe {
-            result = windows::get_proc_address_transmute::<T>(self.hnd, symbol);
+            result = windows::get_proc_address(self.hnd, symbol_name);
         }
 
-        Ok(Symbol::new(result?))
+        let sym_ptr = result?;
+
+        // Based on work by Chayim Friedman:
+        // https://stackoverflow.com/a/71373744
+        let sym_transmute = unsafe { std::mem::transmute_copy(&sym_ptr) };
+
+        Ok(Symbol::new(sym_transmute, sym_ptr as usize))
     }
 
     pub unsafe fn close(self) -> Result<(), Box<dyn Error>> {
@@ -129,15 +145,21 @@ impl Dl {
 #[derive(Debug, Clone, Copy)]
 pub struct Symbol<'lib, T: 'lib> {
     symbol: T,
+    addr: usize,
     pd: PhantomData<&'lib T>,
 }
 
 impl<'lib, T> Symbol<'lib, T> {
-    pub fn new(symbol: T) -> Symbol<'lib, T> {
+    pub fn new(symbol: T, addr: usize) -> Symbol<'lib, T> {
         Symbol {
             symbol,
+            addr,
             pd: PhantomData,
         }
+    }
+
+    pub fn addr(&self) -> usize {
+        self.addr
     }
 }
 
@@ -319,19 +341,6 @@ pub mod unix {
         Ok(symbol_ptr)
     }
 
-    pub unsafe fn do_dlsym_transmute<T>(
-        handle: *mut c_void,
-        symbol: &str,
-    ) -> Result<T, Box<dyn Error>> {
-        let sym_ptr = unsafe { do_dlsym(handle, symbol)? };
-
-        // Based on work by Chayim Friedman:
-        // https://stackoverflow.com/a/71373744
-        let sym_transmute = unsafe { std::mem::transmute_copy(&sym_ptr) };
-
-        Ok(sym_transmute)
-    }
-
     pub(crate) unsafe fn sym_by_addr(addr: usize) -> Result<SymInfo, Box<dyn Error>> {
         let dl_info = unsafe { do_dladdr(addr as *const c_void)? };
 
@@ -445,17 +454,6 @@ pub mod windows {
         }
 
         Ok(result)
-    }
-
-    pub unsafe fn get_proc_address_transmute<T>(
-        handle: *mut c_void,
-        symbol: &str,
-    ) -> Result<T, Box<dyn Error>> {
-        let sym_ptr = unsafe { get_proc_address(handle, symbol)? };
-
-        let sym_transmute = unsafe { std::mem::transmute_copy(&sym_ptr) };
-
-        Ok(sym_transmute)
     }
 
     pub unsafe fn get_proc_address(
