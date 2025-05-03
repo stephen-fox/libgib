@@ -84,7 +84,7 @@ impl Dl {
         self.hnd
     }
 
-    pub unsafe fn sym<T>(&self, symbol_name: &str) -> Result<Symbol<T>, Box<dyn Error>> {
+    pub unsafe fn sym<T>(&self, symbol_name: &str) -> Result<Sym<T>, Box<dyn Error>> {
         // This check comes from dlopen2. It ensures that T is
         // the same size as a pointer.
         //
@@ -113,7 +113,7 @@ impl Dl {
         // https://stackoverflow.com/a/71373744
         let sym_transmute = unsafe { std::mem::transmute_copy(&sym_ptr) };
 
-        Ok(Symbol::new(sym_transmute, sym_ptr as usize))
+        Ok(Sym::new(sym_transmute, sym_ptr as usize))
     }
 
     pub unsafe fn close(self) -> Result<(), Box<dyn Error>> {
@@ -143,15 +143,15 @@ impl Dl {
 /// Copyright (C) 2019 Ahmed Masud <ahmed.masud@saf.ai>
 /// Copyright (C) 2022 OpenByte <development.openbyte@gmail.com>
 #[derive(Debug, Clone, Copy)]
-pub struct Symbol<'lib, T: 'lib> {
+pub struct Sym<'lib, T: 'lib> {
     symbol: T,
     addr: usize,
     pd: PhantomData<&'lib T>,
 }
 
-impl<'lib, T> Symbol<'lib, T> {
-    pub fn new(symbol: T, addr: usize) -> Symbol<'lib, T> {
-        Symbol {
+impl<'lib, T> Sym<'lib, T> {
+    pub fn new(symbol: T, addr: usize) -> Sym<'lib, T> {
+        Sym {
             symbol,
             addr,
             pd: PhantomData,
@@ -163,21 +163,21 @@ impl<'lib, T> Symbol<'lib, T> {
     }
 }
 
-impl<'lib, T> Deref for Symbol<'lib, T> {
+impl<'lib, T> Deref for Sym<'lib, T> {
     type Target = T;
     fn deref(&self) -> &T {
         &self.symbol
     }
 }
 
-impl<'lib, T> DerefMut for Symbol<'lib, T> {
+impl<'lib, T> DerefMut for Sym<'lib, T> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.symbol
     }
 }
 
-unsafe impl<'lib, T: Send> Send for Symbol<'lib, T> {}
-unsafe impl<'lib, T: Sync> Sync for Symbol<'lib, T> {}
+unsafe impl<'lib, T: Send> Send for Sym<'lib, T> {}
+unsafe impl<'lib, T: Sync> Sync for Sym<'lib, T> {}
 
 #[cfg(unix)]
 pub mod unix {
