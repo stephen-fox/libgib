@@ -164,7 +164,11 @@ pub mod unix {
         ptr::{null, null_mut},
     };
 
-    use std::{error::Error, ffi::CString};
+    use std::{
+        error::Error,
+        ffi::CString,
+        sync::{Mutex, OnceLock},
+    };
 
     use crate::SymInfo;
 
@@ -384,7 +388,13 @@ pub mod unix {
         Ok(())
     }
 
+    static DLERROR_MUTEX: OnceLock<Mutex<u8>> = OnceLock::new();
+
     unsafe fn last_dlerror() -> Option<String> {
+        let mu = DLERROR_MUTEX.get_or_init(|| Mutex::new(0));
+
+        let _mu = mu.lock().unwrap();
+
         let err_ptr = unsafe { dlerror() };
         if err_ptr.is_null() {
             return None;
