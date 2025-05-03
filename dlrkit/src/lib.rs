@@ -38,8 +38,20 @@ impl std::fmt::Display for SymInfo {
     }
 }
 
-pub enum Mode {
-    Custom(u32),
+pub enum OpenMode {
+    Unix(c_int),
+    Win32(u32),
+}
+
+impl std::fmt::Display for OpenMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OpenMode::Unix(_) => write!(f, "unix")?,
+            OpenMode::Win32(_) => write!(f, "windows")?,
+        }
+
+        Ok(())
+    }
 }
 
 pub struct Dl {
@@ -53,18 +65,16 @@ impl Dl {
     pub unsafe fn open(file: Option<&str>) -> Result<Self, Box<dyn Error>> {
         #[cfg(unix)]
         unsafe {
-            Dl::open_mode(file, unix::RTLD_NOW)
+            Dl::open_mode(file, OpenMode::Unix(unix::RTLD_NOW))
         }
 
         #[cfg(windows)]
         unsafe {
-            Dl::open_mode(file, 0)
+            Dl::open_mode(file, OpenMode::Win32(0))
         }
     }
 
-    // TODO: Implement custom mode type.
-    // TODO: Fix mode arg.
-    pub unsafe fn open_mode(file: Option<&str>, mode: c_int) -> Result<Self, Box<dyn Error>> {
+    pub unsafe fn open_mode(file: Option<&str>, mode: OpenMode) -> Result<Self, Box<dyn Error>> {
         let result;
 
         #[cfg(unix)]
@@ -74,7 +84,7 @@ impl Dl {
 
         #[cfg(windows)]
         unsafe {
-            result = windows::load_library_exw(file, core::ptr::null_mut(), mode as u32)
+            result = windows::load_library_exw(file, core::ptr::null_mut(), mode)
         }
 
         Ok(Self { hnd: result? })
@@ -192,7 +202,7 @@ pub mod unix {
         sync::{Mutex, OnceLock},
     };
 
-    use crate::SymInfo;
+    use crate::{OpenMode, SymInfo};
 
     pub const RTLD_NOW: c_int = {
         if cfg!(all(target_os = "android", target_pointer_width = "32")) {
@@ -294,8 +304,13 @@ pub mod unix {
 
     pub unsafe fn do_dlopen(
         file: Option<&str>,
-        mode: c_int,
+        mode: OpenMode,
     ) -> Result<*mut c_void, Box<dyn Error>> {
+        let mode: c_int = match mode {
+            OpenMode::Unix(v) => v,
+            _ => return Err(format!("unsupported open mode type: {mode}").into()),
+        };
+
         let handle = match file {
             Some(p) => {
                 let path = CString::new(p)?;
@@ -416,7 +431,10 @@ pub mod unix {
 #[cfg(windows)]
 pub mod windows {
     use core::ffi::{c_char, c_void};
+
     use std::{error::Error, ffi::CString};
+
+    use crate::OpenMode;
 
     #[link(name = "kernel32")]
     extern "system" {
@@ -434,11 +452,16 @@ pub mod windows {
     pub unsafe fn load_library_exw(
         lp_lib_file_name: Option<&str>,
         hfile: *mut c_void,
-        dwflags: u32,
+        mode: OpenMode,
     ) -> Result<*mut c_void, Box<dyn Error>> {
         if lp_lib_file_name.is_none() {
             return Err("lp_lib_file_name is none")?;
         }
+
+        let dwflags: u32 = match mode {
+            OpenMode::Win32(v) => v,
+            _ => return Err(format!("unknown open mode: {mode}").into()),
+        };
 
         let lp_lib_file_name = lp_lib_file_name.unwrap();
 
