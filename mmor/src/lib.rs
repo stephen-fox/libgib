@@ -6,6 +6,9 @@ use std::{
 #[cfg(unix)]
 pub mod unix;
 
+#[cfg(windows)]
+pub mod windows;
+
 pub struct Object {
     pub name: Option<String>,
     pub path: Option<PathBuf>,
@@ -38,6 +41,11 @@ pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
     #[cfg(unix)]
     unsafe {
         unix::objects()
+    }
+
+    #[cfg(windows)]
+    unsafe {
+        windows::objects()
     }
 }
 
