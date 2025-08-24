@@ -1,8 +1,12 @@
 use core::ffi::c_void;
 
-use std::{error::Error, ffi::CStr};
+use std::{error::Error, ffi::CStr, path::PathBuf};
 
-use crate::{Object, Objects};
+use crate::Object;
+
+struct Objects {
+    objects: Vec<Object>,
+}
 
 pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
     let mut objs = Objects {
@@ -37,16 +41,23 @@ unsafe extern "C" fn callback(
 
     let mut name: Option<String> = None;
 
+    let mut path: Option<PathBuf> = None;
+
     if !info.dlpi_name.is_null() {
         let tmp = unsafe { CStr::from_ptr(info.dlpi_name) };
 
         if let Ok(str) = tmp.to_str() {
+            if str.starts_with("/") {
+                path = Some(PathBuf::from(str));
+            }
+
             name = Some(str.to_string());
         }
     }
 
     objs.objects.push(Object {
         name: name,
+        path: path,
         addr: info.dlpi_addr as usize,
     });
 
