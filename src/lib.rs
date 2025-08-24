@@ -51,7 +51,7 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
     };
 
     for object in objects {
-        eprintln!("DEBUG: object: 0x{:?} -> 0x{:x?}", object.name, object.addr)
+        eprintln!("DEBUG: object: {}", object)
     }
 
     let got_offset = 0x3f60;
@@ -151,7 +151,7 @@ fn plaid_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
     };
 
     for object in objects {
-        eprintln!("DEBUG: object: 0x{:?} -> 0x{:x?}", object.name, object.addr)
+        eprintln!("DEBUG: object: {}", object)
     }
 
     let got_addr = exe_addr + 0x3f58;
