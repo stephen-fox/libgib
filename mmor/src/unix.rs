@@ -2,7 +2,7 @@ use core::ffi::c_void;
 
 use std::{error::Error, ffi::CStr, path::PathBuf};
 
-use crate::Object;
+use crate::{path_basename, Object};
 
 struct Objects {
     objects: Vec<Object>,
@@ -46,12 +46,16 @@ unsafe extern "C" fn callback(
     if !info.dlpi_name.is_null() {
         let tmp = unsafe { CStr::from_ptr(info.dlpi_name) };
 
-        if let Ok(str) = tmp.to_str() {
-            if str.starts_with("/") {
-                path = Some(PathBuf::from(str));
-            }
+        if let Ok(str_ref) = tmp.to_str() {
+            if str_ref.starts_with("/") {
+                let path_buf = PathBuf::from(str_ref);
 
-            name = Some(str.to_string());
+                name = path_basename(&path_buf);
+
+                path = Some(path_buf);
+            } else {
+                name = Some(str_ref.to_string());
+            }
         }
     }
 

@@ -1,4 +1,7 @@
-use std::{error::Error, path::PathBuf};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+};
 
 #[cfg(unix)]
 pub mod unix;
@@ -36,4 +39,14 @@ pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
     unsafe {
         unix::objects()
     }
+}
+
+pub(crate) fn path_basename(pathbuf: &Path) -> Option<String> {
+    if let Some(os_str) = pathbuf.file_name() {
+        if let Some(str_ref) = os_str.to_str() {
+            return Some(str_ref.to_string());
+        }
+    }
+
+    None
 }
