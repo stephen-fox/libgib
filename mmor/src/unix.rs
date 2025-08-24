@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 
-use std::{error::Error, ffi::CString};
+use std::{error::Error, ffi::CStr};
 
 use crate::{Object, Objects};
 
@@ -38,10 +38,10 @@ unsafe extern "C" fn callback(
     let mut name: Option<String> = None;
 
     if !info.dlpi_name.is_null() {
-        let tmp = unsafe { CString::from_raw(info.dlpi_name.cast_mut()) };
+        let tmp = unsafe { CStr::from_ptr(info.dlpi_name) };
 
-        if let Ok(str) = tmp.into_string() {
-            name = Some(str);
+        if let Ok(str) = tmp.to_str() {
+            name = Some(str.to_string());
         }
     }
 
