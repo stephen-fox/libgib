@@ -1,0 +1,14 @@
+[package]
+name = "libcproxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ctor = "0.4.1"
+dlrkit = { version = "0.1.0", path = "../../dlrkit" }
+mmor = { version = "0.1.0", path = "../../mmor" }
+mrevise = { version = "0.1.0", path = "../../mrevise" }
+rsbmalloc = "0.4.4"
+
+[lib]
+crate-type = ["cdylib"]
