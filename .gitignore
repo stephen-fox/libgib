@@ -1,8 +1,5 @@
-/target
+target/
 
 # emacs:
 *\#*
 *~
-
-# Other rust project:
-rsbmalloc
