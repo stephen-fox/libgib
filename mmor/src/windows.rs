@@ -116,14 +116,14 @@ pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
 }
 
 fn total_enum_process_modules_ex(process_handle: *mut c_void) -> Result<usize, Box<dyn Error>> {
-    let mut lpcbNeeded: u32 = 0;
+    let mut num_bytes_needed: u32 = 0;
 
     let enum_modules_res = unsafe {
         K32EnumProcessModulesEx(
             process_handle,
             ptr::null_mut(),
             0,
-            &mut lpcbNeeded,
+            &mut num_bytes_needed,
             LIST_MODULES_ALL,
         )
     };
@@ -134,7 +134,7 @@ fn total_enum_process_modules_ex(process_handle: *mut c_void) -> Result<usize, B
         ))?
     }
 
-    Ok(lpcbNeeded as usize / size_of::<*mut c_void>())
+    Ok(num_bytes_needed as usize / size_of::<*mut c_void>())
 }
 
 fn module_to_object(
