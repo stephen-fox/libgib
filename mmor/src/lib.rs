@@ -9,6 +9,41 @@ pub mod unix;
 #[cfg(windows)]
 pub mod windows;
 
+pub unsafe fn objects() -> Result<Objects, Box<dyn Error>> {
+    unsafe {
+        objects_with_options(ObjectLookupOptions {
+            skip_invalid_handle: false,
+        })
+    }
+}
+
+pub struct ObjectLookupOptions {
+    // skip_invalid_handle ignores objects that return an invalid
+    // handle error on Windows when set to true.
+    //
+    // Refer to commit 052b2dd458fb588c048566491815026c614ffee8
+    // for details.
+    pub skip_invalid_handle: bool,
+}
+
+pub unsafe fn objects_with_options(
+    options: ObjectLookupOptions,
+) -> Result<Objects, Box<dyn Error>> {
+    #[cfg(unix)]
+    unsafe {
+        unix::objects(options)
+    }
+
+    #[cfg(windows)]
+    unsafe {
+        windows::objects(options)
+    }
+}
+
+pub struct Objects {
+    pub objects: Vec<Object>,
+}
+
 pub struct Object {
     pub name: Option<String>,
     pub path: Option<PathBuf>,
@@ -34,18 +69,6 @@ impl std::fmt::Display for Object {
         )?;
 
         Ok(())
-    }
-}
-
-pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
-    #[cfg(unix)]
-    unsafe {
-        unix::objects()
-    }
-
-    #[cfg(windows)]
-    unsafe {
-        windows::objects()
     }
 }
 

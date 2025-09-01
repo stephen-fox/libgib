@@ -4,7 +4,7 @@ use core::{ffi::c_void, ptr};
 
 use std::{error::Error, mem::size_of, path::PathBuf};
 
-use crate::{path_basename, Object};
+use crate::{path_basename, Object, ObjectLookupOptions, Objects};
 
 const ENUM_PROCESS_MODULES_FILTER_FLAG: u32 = {
     if cfg!(target_pointer_width = "32") {
@@ -71,7 +71,7 @@ unsafe extern "system" {
     ) -> bool;
 }
 
-pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
+pub unsafe fn objects(options: ObjectLookupOptions) -> Result<Objects, Box<dyn Error>> {
     let current_process = unsafe { GetCurrentProcess() };
     if current_process.is_null() {
         Err(format!(
@@ -112,17 +112,21 @@ pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
     let mut objects = Vec::new();
 
     for (i, module_handle) in module_handles.iter_mut().enumerate() {
-        let object = module_to_object(current_process, *module_handle).map_err(|err| {
-            format!(
-                "failed to lookup windows module information (i: {i}, handle: {:p}) - {err}",
-                module_handle
-            )
-        })?;
+        match lookup_module(current_process, *module_handle) {
+            Ok(object) => objects.push(object),
+            Err(err) => {
+                if options.skip_invalid_handle && err.is_invalid_handle_error() {
+                    continue;
+                }
 
-        objects.push(object);
+                return Err(format!(
+                    "failed to lookup windows module information (i: {i}, handle: {module_handle:p}) - {err}",
+                ))?;
+            }
+        }
     }
 
-    Ok(objects)
+    Ok(Objects { objects: objects })
 }
 
 fn total_enum_process_modules_ex(process_handle: *mut c_void) -> Result<usize, Box<dyn Error>> {
@@ -147,12 +151,12 @@ fn total_enum_process_modules_ex(process_handle: *mut c_void) -> Result<usize, B
     Ok(num_bytes_needed as usize / size_of::<*mut c_void>())
 }
 
-fn module_to_object(
+fn lookup_module(
     process_handle: *mut c_void,
     module_handle: *mut c_void,
-) -> Result<Object, Box<dyn Error>> {
+) -> Result<Object, LookupModuleError> {
     let info = get_module_info(process_handle, module_handle)
-        .map_err(|err| format!("get module information failed - {err}"))?;
+        .map_err(|err| LookupModuleError::GetModuleInfoFailed(err))?;
 
     const MAX_PATH: usize = 32767;
 
@@ -169,10 +173,9 @@ fn module_to_object(
         )
     };
     if filename_res == 0 {
-        Err(format!(
-            "K32GetModuleFileNameExW failed - {err}",
-            err = std::io::Error::last_os_error()
-        ))?
+        Err(LookupModuleError::GetModuleFileNameFailed(
+            std::io::Error::last_os_error(),
+        ))?;
     }
 
     unsafe { filename_raw.set_len(filename_res as usize) };
@@ -187,7 +190,38 @@ fn module_to_object(
                 addr: info.lpBaseOfDll as usize,
             })
         }
-        Err(err) => Err(err)?,
+        Err(err) => Err(LookupModuleError::ParseFileNameFailed(err))?,
+    }
+}
+
+enum LookupModuleError {
+    GetModuleInfoFailed(std::io::Error),
+    GetModuleFileNameFailed(std::io::Error),
+    ParseFileNameFailed(std::string::FromUtf16Error),
+}
+
+impl std::fmt::Display for LookupModuleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::GetModuleInfoFailed(err) => write!(f, "get module info failed - {err}"),
+            Self::ParseFileNameFailed(err) => {
+                write!(f, "failed to convert filename to utf16 string - {err}")
+            }
+            Self::GetModuleFileNameFailed(err) => write!(f, "get module file name failed - {err}"),
+        }
+    }
+}
+
+impl LookupModuleError {
+    fn is_invalid_handle_error(&self) -> bool {
+        let err = match self {
+            Self::GetModuleInfoFailed(err) => err,
+            Self::GetModuleFileNameFailed(err) => err,
+            _ => return false,
+        };
+
+        // 6 seems to be invalid handle error.
+        err.raw_os_error().is_some_and(|raw_err| raw_err == 6)
     }
 }
 
@@ -202,7 +236,7 @@ struct MODULEINFO {
 fn get_module_info(
     process_handle: *mut c_void,
     module_handle: *mut c_void,
-) -> Result<MODULEINFO, Box<dyn Error>> {
+) -> Result<MODULEINFO, std::io::Error> {
     let mut mod_info = MODULEINFO {
         lpBaseOfDll: ptr::null_mut(),
         SizeOfImage: 0,
@@ -218,10 +252,7 @@ fn get_module_info(
         )
     };
     if !result {
-        Err(format!(
-            "K32GetModuleInformation failed - {err}",
-            err = std::io::Error::last_os_error()
-        ))?
+        return Err(std::io::Error::last_os_error())?;
     }
 
     Ok(mod_info)

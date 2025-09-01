@@ -2,22 +2,18 @@ use core::ffi::c_void;
 
 use std::{error::Error, ffi::CStr, path::PathBuf};
 
-use crate::{path_basename, Object};
+use crate::{path_basename, Object, ObjectLookupOptions, Objects};
 
-struct Objects {
-    objects: Vec<Object>,
-}
-
-pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
-    let mut objs = Objects {
+pub unsafe fn objects(_: ObjectLookupOptions) -> Result<Objects, Box<dyn Error>> {
+    let mut objects = Objects {
         objects: Vec::new(),
     };
 
-    let objects_ptr: *mut Objects = &mut objs;
+    let objects_ptr: *mut Objects = &mut objects;
 
     unsafe { libc::dl_iterate_phdr(Some(callback), objects_ptr as *mut c_void) };
 
-    Ok(objs.objects)
+    Ok(objects)
 }
 
 unsafe extern "C" fn callback(

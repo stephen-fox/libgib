@@ -42,7 +42,7 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
         Err(err) => return Err(format!("failed to get memory-mapped objects - {err}"))?,
     };
 
-    let exe_addr = match objects
+    let exe_addr = match objects.objects
         .iter()
         .find(|obj| obj.name.as_ref().is_some_and(|name| name.is_empty()))
     {
@@ -50,7 +50,7 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
         None => return Err("failed to find exe in memory-mapped objects".into()),
     };
 
-    for object in objects {
+    for object in objects.objects {
         eprintln!("DEBUG: object: {}", object)
     }
 
@@ -142,7 +142,7 @@ fn plaid_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
         Err(err) => return Err(format!("failed to get memory-mapped objects - {err}"))?,
     };
 
-    let exe_addr = match objects
+    let exe_addr = match objects.objects
         .iter()
         .find(|obj| obj.name.as_ref().is_some_and(|name| name.is_empty()))
     {
@@ -150,7 +150,7 @@ fn plaid_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
         None => return Err("failed to find exe in memory-mapped objects".into()),
     };
 
-    for object in objects {
+    for object in objects.objects{
         eprintln!("DEBUG: object: {}", object)
     }
 
