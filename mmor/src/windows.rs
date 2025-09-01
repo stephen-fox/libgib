@@ -60,7 +60,7 @@ unsafe extern "system" {
     fn K32GetModuleInformation(
         hProcess: *mut c_void,
         hModule: *mut c_void,
-        lpModuleInfo: *const MODULEINFO,
+        lpModuleInfo: *mut MODULEINFO,
         cb: u32,
     ) -> bool;
 }
