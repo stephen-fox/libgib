@@ -6,7 +6,13 @@ use std::{error::Error, mem::size_of, path::PathBuf};
 
 use crate::{path_basename, Object};
 
-const LIST_MODULES_ALL: u32 = 0x03;
+const ENUM_PROCESS_MODULES_FILTER_FLAG: u32 = {
+    if cfg!(target_pointer_width = "32") {
+        0x01 // LIST_MODULES_32BIT
+    } else {
+        0x03 // LIST_MODULES_ALL
+    }
+};
 
 #[link(name = "kernel32")]
 unsafe extern "system" {
@@ -79,19 +85,19 @@ pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
 
     // Passing an array (Vec) via FFI by Michael-F-Bryan:
     // https://users.rust-lang.org/t/ffi-how-to-pass-a-array-with-structs-to-a-c-func-that-fills-the-array-out-pointer-and-then-how-to-access-the-items-after-in-my-rust-code/83798/2
-    let mut modules: Vec<*mut c_void> = Vec::with_capacity(total_modules);
+    let mut module_handles: Vec<*mut c_void> = Vec::with_capacity(total_modules);
 
-    let modules_uninit = modules.spare_capacity_mut();
+    let modules_uninit = module_handles.spare_capacity_mut();
 
-    let mut num_modules_returned: u32 = 0;
+    let mut num_bytes_needed: u32 = 0;
 
     let enum_modules_res = unsafe {
         K32EnumProcessModulesEx(
             current_process,
             modules_uninit.as_mut_ptr().cast(),
             modules_uninit.len() as u32,
-            &mut num_modules_returned,
-            LIST_MODULES_ALL,
+            &mut num_bytes_needed,
+            ENUM_PROCESS_MODULES_FILTER_FLAG,
         )
     };
     if enum_modules_res == 0 {
@@ -101,13 +107,17 @@ pub unsafe fn objects() -> Result<Vec<Object>, Box<dyn Error>> {
         ))?
     }
 
-    unsafe { modules.set_len(num_modules_returned as usize) };
+    unsafe { module_handles.set_len(total_modules as usize) };
 
     let mut objects = Vec::new();
 
-    for module_handle in modules {
-        let object = module_to_object(current_process, module_handle)
-            .map_err(|err| format!("failed to lookup windows module information - {err}"))?;
+    for (i, module_handle) in module_handles.iter_mut().enumerate() {
+        let object = module_to_object(current_process, *module_handle).map_err(|err| {
+            format!(
+                "failed to lookup windows module information (i: {i}, handle: {:p}) - {err}",
+                module_handle
+            )
+        })?;
 
         objects.push(object);
     }
@@ -124,7 +134,7 @@ fn total_enum_process_modules_ex(process_handle: *mut c_void) -> Result<usize, B
             ptr::null_mut(),
             0,
             &mut num_bytes_needed,
-            LIST_MODULES_ALL,
+            ENUM_PROCESS_MODULES_FILTER_FLAG,
         )
     };
     if enum_modules_res == 0 {
