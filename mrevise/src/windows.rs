@@ -1,7 +1,7 @@
 // PAGE_PROTECTION_FLAGS = u32
 
 use core::{
-    ffi::{c_int, c_void},
+    ffi::c_void,
     ptr::null_mut,
 };
 
