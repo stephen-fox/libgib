@@ -115,7 +115,7 @@ pub unsafe fn objects(options: ObjectLookupOptions) -> Result<Objects, Box<dyn E
         match lookup_module(current_process, *module_handle) {
             Ok(object) => objects.push(object),
             Err(err) => {
-                if options.skip_invalid_handle && err.is_invalid_handle_error() {
+                if options.skip_invalid_handles && err.is_invalid_handle_error() {
                     continue;
                 }
 

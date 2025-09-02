@@ -12,18 +12,18 @@ pub mod windows;
 pub unsafe fn objects() -> Result<Objects, Box<dyn Error>> {
     unsafe {
         objects_with_options(ObjectLookupOptions {
-            skip_invalid_handle: false,
+            skip_invalid_handles: false,
         })
     }
 }
 
 pub struct ObjectLookupOptions {
-    // skip_invalid_handle ignores objects that return an invalid
-    // handle error on Windows when set to true.
-    //
-    // Refer to commit 052b2dd458fb588c048566491815026c614ffee8
-    // for details.
-    pub skip_invalid_handle: bool,
+    /// skip_invalid_handles ignores objects that return an invalid
+    /// handle error on Windows when set to true.
+    ///
+    /// Refer to commit 052b2dd458fb588c048566491815026c614ffee8
+    /// for details.
+    pub skip_invalid_handles: bool,
 }
 
 pub unsafe fn objects_with_options(
