@@ -106,6 +106,10 @@ pub unsafe fn use_memory<F, P>(
 where
     F: FnOnce(*mut P),
 {
+    if attrs.prot_after.is_some() && attrs.try_restore_orig_prot {
+        Err("prot_after is set and try_restore_orig_prot is true")?;
+    }
+
     let mut protect_ptr: *mut P = pointer.cast_mut();
     let mut chunk_size = attrs.length;
 
@@ -138,22 +142,23 @@ where
 
     action(pointer.cast_mut());
 
-    let prot_after = match attrs.prot_after {
-        Some(p) => p,
+    let mut final_prot = orig_prot;
+
+    if attrs.prot_after.is_some() {
+        final_prot = attrs.prot_after;
+    }
+
+    let final_prot = match final_prot {
+        Some(prot) => prot,
         None => return Ok(()),
     };
-
-    let mut final_prot = prot_after;
-    if attrs.try_restore_orig_prot && orig_prot.is_some() {
-        final_prot = orig_prot.unwrap();
-    }
 
     match protect(protect_ptr, chunk_size, final_prot, None) {
         Ok(_) => Ok(()),
         Err(err) => return Err(format!(
-            "failed to restore memory region protection at 0x{:x?} (orig: 0x{:x?}) length 0x{:x?} (orig: 0x{:x?}) - {}",
-            protect_ptr.addr(),
-            pointer.addr(),
+            "failed to restore memory region protection at {:p} (orig: {:p}) length {:#x} (orig: {:#x}) - {}",
+            protect_ptr,
+            pointer,
             chunk_size,
             attrs.length,
             err
