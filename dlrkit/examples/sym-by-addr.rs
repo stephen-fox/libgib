@@ -10,17 +10,20 @@ const LIBRARY_PATH: &str = {
     }
 };
 
-#[cfg(unix)]
 fn main() -> Result<(), Box<dyn Error>> {
-    let lib = unsafe { dlrkit::Dl::open(Some(LIBRARY_PATH))? };
+    let _lib = unsafe { dlrkit::Dl::open(Some(LIBRARY_PATH))? };
 
-    let add_ptr = unsafe { lib.sym::<*mut ()>("add")? };
+    // TODO: Windows support.
+    #[cfg(unix)]
+    {
+        let add_ptr = unsafe { _lib.sym::<*mut ()>("add")? };
 
-    let info = unsafe { dlrkit::sym_by_addr(add_ptr.addr())? };
+        let info = unsafe { dlrkit::sym_by_addr(add_ptr.addr())? };
 
-    eprintln!("{info}");
+        eprintln!("{info}");
 
-    unsafe { lib.close()? };
+        unsafe { _lib.close()? };
+    }
 
     Ok(())
 }
