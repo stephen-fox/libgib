@@ -7,10 +7,11 @@ use std::{
 
 use ctor::ctor;
 
-use mrevise::{use_memory, Prot};
-
 use rsbmalloc::page_allocator;
 
+// We override the memory allocator so we do not use malloc(3) and
+// potentially create an infinite loop of:
+// malloc -> our_code -> malloc -> (...)
 #[global_allocator]
 static ALLOCATOR: page_allocator::PageAllocator = page_allocator::PageAllocator {};
 
@@ -31,6 +32,14 @@ fn on_load() {
     }
 }
 
+// This function demonstrates proxying sendfile64 by searching
+// through the current process' global offset table and looking
+// up each symbol to see if it is the target function.
+//
+// We used this to better understand the behavior of sendfile(2)
+// in the "library" CTF as a part pf LACTF 2025:
+//
+// https://github.com/uclaacm/lactf-archive/blob/3379d4a7b36680764a34e7dc817cc3c94c244764/2025/pwn/library/library.c
 fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
     // Based on work by phip1611:
     // https://stackoverflow.com/a/57083797
@@ -42,7 +51,8 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
         Err(err) => return Err(format!("failed to get memory-mapped objects - {err}"))?,
     };
 
-    let exe_addr = match objects.objects
+    let exe_addr = match objects
+        .objects
         .iter()
         .find(|obj| obj.name.as_ref().is_some_and(|name| name.is_empty()))
     {
@@ -62,15 +72,14 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
 
     eprintln!("DEBUG: exe: 0x{:x?} | got: 0x{:x?}", exe_addr, got_addr);
 
-    match unsafe {
-        use_memory(
-            got_addr as *mut c_void,
-            mrevise::MemAttrs {
-                length: 0x4000 - 0x3f60,
+    unsafe {
+        mrevise::mop(
+            mrevise::MopConfig {
+                pointer: got_addr as *mut c_void,
+                size: 0x4000 - 0x3f60,
                 align_to: Some(4096),
-                prot_during: Some(Prot::ReadWrite),
-                prot_after: Some(Prot::Read),
-                try_restore_orig_prot: false,
+                prot_before: mrevise::MaybeProt::ChangeTo(mrevise::Prot::ReadWrite),
+                prot_after: mrevise::MaybeProt::ChangeTo(mrevise::Prot::Read),
             },
             |addr| {
                 let mut current = addr.addr();
@@ -78,6 +87,7 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
 
                 eprintln!("current: 0x{:x?} | max: 0x{:x?}", current, max);
 
+                // Search for the sendfile64 global offset table entry.
                 while current < max {
                     let current_copy = current;
 
@@ -92,8 +102,9 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
                     let info = match dlrkit::sym_by_addr(entry_value) {
                         Ok(i) => i,
                         Err(err) => {
-                            eprintln!("failed to dladdr malloc entry - {err}");
-                            continue;
+                            return Err(std::io::Error::other(format!(
+                                "failed to dladdr malloc entry - {err}"
+                            )))?;
                         }
                     };
 
@@ -114,12 +125,12 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
                         _ => {}
                     };
                 }
+
+                Ok(())
             },
         )
-    } {
-        Ok(_) => {}
-        Err(err) => return Err(format!("failed to modify got - {err}"))?,
-    };
+    }
+    .map_err(|err| format!("failed to modify got - {err}"))?;
 
     // use std::io::BufRead;
     // let stdin = std::io::stdin();
@@ -131,10 +142,13 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// This function is unused, as it was used in a different CTF we
+// never completed. It demonstrates proxying libc's malloc(3) and
+// fgest(3) functions using a less-dynamic approach from the other
+// CTF function by hardcoding global offset table offsets.
+//
+// This function was used in the plaid CTF challenge.
 fn plaid_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
-    // Based on work by phip1611:
-    // https://stackoverflow.com/a/57083797
-
     eprintln!("DEBUG({}): loading...", id());
 
     let objects = match unsafe { mmor::objects() } {
@@ -142,7 +156,8 @@ fn plaid_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
         Err(err) => return Err(format!("failed to get memory-mapped objects - {err}"))?,
     };
 
-    let exe_addr = match objects.objects
+    let exe_addr = match objects
+        .objects
         .iter()
         .find(|obj| obj.name.as_ref().is_some_and(|name| name.is_empty()))
     {
@@ -150,26 +165,25 @@ fn plaid_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
         None => return Err("failed to find exe in memory-mapped objects".into()),
     };
 
-    for object in objects.objects{
+    for object in objects.objects {
         eprintln!("DEBUG: object: {}", object)
     }
 
+    // 0x3f58 - 0x4000  .got
     let got_addr = exe_addr + 0x3f58;
 
     let got = got_addr as *mut c_void;
 
     eprintln!("DEBUG: exe: 0x{:x?} | got: 0x{:x?}", exe_addr, got_addr);
 
-    // 0x3f58 - 0x4000  .got
-    match unsafe {
-        use_memory(
-            got,
-            mrevise::MemAttrs {
-                length: 0x4000 - 0x3f58,
+    unsafe {
+        mrevise::mop(
+            mrevise::MopConfig {
+                pointer: got,
+                size: 0x4000 - 0x3f58,
                 align_to: Some(4096),
-                prot_during: Some(Prot::ReadWrite),
-                prot_after: Some(Prot::Read),
-                try_restore_orig_prot: false,
+                prot_before: mrevise::MaybeProt::ChangeTo(mrevise::Prot::ReadWrite),
+                prot_after: mrevise::MaybeProt::ChangeTo(mrevise::Prot::Read),
             },
             |addr| {
                 // malloc = got + 0x50.
@@ -181,12 +195,12 @@ fn plaid_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
                 let fgets = swap_got_entry("fgets", addr.add(0x40), fake_fgets as *mut c_void);
 
                 FGETS_PTR = Some(std::mem::transmute_copy(&fgets));
+
+                Ok(())
             },
         )
-    } {
-        Ok(_) => {}
-        Err(err) => return Err(format!("failed to modify got - {err}"))?,
-    };
+    }
+    .map_err(|err| format!("failed to modify got - {err}"))?;
 
     // use std::io::BufRead;
     // let stdin = std::io::stdin();
