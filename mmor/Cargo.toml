@@ -1,5 +1,8 @@
 [package]
 name = "mmor"
+description = """
+mmor provides an OS-agnostic library for enumering memory-mapped objects
+in the current process."""
 version = "0.1.0"
 edition = "2024"
 

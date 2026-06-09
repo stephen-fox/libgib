@@ -9,6 +9,9 @@ pub mod unix;
 #[cfg(windows)]
 pub mod windows;
 
+/// objects enumerates the memory-mapped objects in the current process.
+///
+/// It is a wrapper for the objects_with_options function.
 pub unsafe fn objects() -> Result<Objects, Box<dyn Error>> {
     unsafe {
         objects_with_options(ObjectLookupOptions {
@@ -17,6 +20,8 @@ pub unsafe fn objects() -> Result<Objects, Box<dyn Error>> {
     }
 }
 
+/// ObjectLookupOptions are options that customize the behavior of
+/// the objects_with_options function.
 pub struct ObjectLookupOptions {
     /// skip_invalid_handles ignores objects that return an invalid
     /// handle error on Windows when set to true.
@@ -26,6 +31,8 @@ pub struct ObjectLookupOptions {
     pub skip_invalid_handles: bool,
 }
 
+/// objects_with_otions enumerates the memory-mapped objects in the
+/// current process.
 pub unsafe fn objects_with_options(
     options: ObjectLookupOptions,
 ) -> Result<Objects, Box<dyn Error>> {
@@ -40,13 +47,21 @@ pub unsafe fn objects_with_options(
     }
 }
 
+/// Objects contains the memory-mapped objects and other details.
 pub struct Objects {
+    /// objects are the memory-mapped objects for a process.
     pub objects: Vec<Object>,
 }
 
+/// Object represents a single memory-mapped object.
 pub struct Object {
+    /// name is the name of the object, if any.
     pub name: Option<String>,
+
+    /// path is the file path of the object, if any.
     pub path: Option<PathBuf>,
+
+    /// addr is the memory address of the object.
     pub addr: usize,
 }
 
