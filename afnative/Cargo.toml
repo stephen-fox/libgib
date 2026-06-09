@@ -1,5 +1,8 @@
 [package]
 name = "afnative"
+description = """
+afnative provides an abstraction for operating-system-specific sockets
+like Unix sockets and Windows named pipes."""
 version = "0.1.0"
 edition = "2024"
 
