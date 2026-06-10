@@ -4,6 +4,7 @@ use std::{
     error::Error,
     marker::PhantomData,
     ops::{Deref, DerefMut},
+    path::Path,
 };
 
 #[cfg(unix)]
@@ -12,17 +13,38 @@ pub mod unix;
 #[cfg(windows)]
 pub mod windows;
 
-// TODO: Windows support, see GetModuleHandleExW:
-// https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw
+/// sym_by_addr looks up the symbol corresponding to the specified
+/// memory address.
+///
+/// ## Safety
+///
+/// This function is unsafe because it relies on OS APIs that
+/// provide no memory safety assurances.
+///
+/// ## Arguments
+///
+/// * `addr` - The memory address of the symbol to lookup.
+///
+/// TODO: Windows support, see GetModuleHandleExW:
+/// https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw
 #[cfg(unix)]
 pub unsafe fn sym_by_addr(addr: usize) -> Result<SymInfo, Box<dyn Error>> {
     unsafe { unix::sym_by_addr(addr) }
 }
 
+/// SymInfo represents information about a symbol.
 pub struct SymInfo {
+    /// object_name is the name of the symbol's parent object.
     pub object_name: String,
+
+    /// object_base_addr is the base address of the symbol's
+    /// parent object.
     pub object_base_addr: *const c_void,
+
+    /// sym_name is the name of the symbol.
     pub sym_name: String,
+
+    /// sym_addr is the address of the symbol.
     pub sym_addr: *const c_void,
 }
 
@@ -44,6 +66,7 @@ impl std::fmt::Display for SymInfo {
     }
 }
 
+/// OpenMode specifies the behavior for the Dl::open_mode function.
 pub enum OpenMode {
     Unix(c_int),
     Win32(u32),
@@ -60,6 +83,7 @@ impl std::fmt::Display for OpenMode {
     }
 }
 
+/// Dl represents a dynamic linker object such as a library.
 pub struct Dl {
     hnd: *mut c_void,
 }
@@ -68,7 +92,15 @@ unsafe impl Send for Dl {}
 unsafe impl Sync for Dl {}
 
 impl Dl {
-    pub unsafe fn open(file: Option<&str>) -> Result<Self, Box<dyn Error>> {
+    /// open loads a library such as a .so file on Unix-like systems or
+    /// a .dll on Windows. It is a wrapper for the open_mode function,
+    /// refer to that function's documentation for more details.
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe because it relies on OS APIs that
+    /// provide no memory safety assurances.
+    pub unsafe fn open<P: AsRef<Path>>(file: Option<P>) -> Result<Self, Box<dyn Error>> {
         #[cfg(unix)]
         unsafe {
             Dl::open_mode(file, OpenMode::Unix(unix::RTLD_NOW))
@@ -80,7 +112,25 @@ impl Dl {
         }
     }
 
-    pub unsafe fn open_mode(file: Option<&str>, mode: OpenMode) -> Result<Self, Box<dyn Error>> {
+    /// open loads a library such as a .so file on Unix-like systems or
+    /// a .dll on Windows.
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe because it relies on OS APIs that
+    /// provide no memory safety assurances.
+    ///
+    /// ## Arguments
+    ///
+    /// * file - The path to the dynamic library to load. On Unix-like
+    ///   systems this can be set to None, in which case a pointer to
+    ///   the process' executable will be returned.
+    /// * mode - Configures the behavior of the dynamic linker when
+    ///   loading the library.
+    pub unsafe fn open_mode<P: AsRef<Path>>(
+        file: Option<P>,
+        mode: OpenMode,
+    ) -> Result<Self, Box<dyn Error>> {
         let result;
 
         #[cfg(unix)]
@@ -96,11 +146,22 @@ impl Dl {
         Ok(Self { hnd: result? })
     }
 
+    /// handle returns the underlying pointer to the memory-mapped object.
     pub unsafe fn handle(&self) -> *mut c_void {
         self.hnd
     }
 
-    pub unsafe fn sym<T>(&self, symbol_name: &str) -> Result<Sym<T>, Box<dyn Error>> {
+    /// sym looks for a symbol in the current object by its name.
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe because it relies on OS APIs that
+    /// provide no memory safety assurances.
+    ///
+    /// ## Arguments
+    ///
+    /// * `symbol_name` - The name of the symbol to lookup.
+    pub unsafe fn sym<T>(&self, symbol_name: &str) -> Result<Sym<'_, T>, Box<dyn Error>> {
         // This check comes from dlopen2. It ensures that T is
         // the same size as a pointer.
         //
@@ -132,6 +193,12 @@ impl Dl {
         Ok(Sym::new(sym_transmute, sym_ptr as usize))
     }
 
+    /// close unloads the underlying memory-mapped object.
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe because it relies on OS APIs that
+    /// provide no memory safety assurances.
     pub unsafe fn close(self) -> Result<(), Box<dyn Error>> {
         #[cfg(unix)]
         unsafe {
@@ -145,7 +212,7 @@ impl Dl {
     }
 }
 
-/// Safe wrapper around a symbol obtained from `Dl`.
+/// Sym is a safe wrapper around a symbol obtained from `Dl`.
 ///
 /// This is the most generic type, valid for obtaining functions,
 /// references and pointers. It does not accept null value of

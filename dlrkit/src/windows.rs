@@ -1,6 +1,6 @@
 use core::ffi::{c_char, c_void};
 
-use std::{error::Error, ffi::CString};
+use std::{error::Error, ffi::CString, path::Path};
 
 use crate::OpenMode;
 
@@ -17,24 +17,23 @@ extern "system" {
     fn FreeLibrary(hlibmodule: *mut c_void) -> bool;
 }
 
-pub unsafe fn load_library_exw(
-    lp_lib_file_name: Option<&str>,
+pub unsafe fn load_library_exw<P: AsRef<Path>>(
+    lp_lib_file_name: Option<P>,
     hfile: *mut c_void,
     mode: OpenMode,
 ) -> Result<*mut c_void, Box<dyn Error>> {
-    if lp_lib_file_name.is_none() {
-        return Err("lp_lib_file_name is none")?;
-    }
+    let maybe_path = path_to_utf16(lp_lib_file_name)
+        .map_err(|err| format!("failed to convert lp_lib_file_name to utf-16 - {err}"))?;
+
+    let lp_lib_file_name_utf16 = match maybe_path {
+        Some(path) => path,
+        None => return Err("lp_lib_file_name is none")?,
+    };
 
     let dwflags: u32 = match mode {
         OpenMode::Win32(v) => v,
         _ => return Err(format!("unknown open mode: {mode}").into()),
     };
-
-    let lp_lib_file_name = lp_lib_file_name.unwrap();
-
-    let mut lp_lib_file_name_utf16 = lp_lib_file_name.encode_utf16().collect::<Vec<_>>();
-    lp_lib_file_name_utf16.push(0);
 
     let result = LoadLibraryExW(lp_lib_file_name_utf16.as_ptr(), hfile, dwflags);
     if result.is_null() {
@@ -45,6 +44,20 @@ pub unsafe fn load_library_exw(
     }
 
     Ok(result)
+}
+
+fn path_to_utf16<P: AsRef<Path>>(path: Option<P>) -> Result<Option<Vec<u16>>, Box<dyn Error>> {
+    match path {
+        Some(p) => match p.as_ref().to_str() {
+            Some(s) => {
+                let mut utf16 = s.encode_utf16().collect::<Vec<_>>();
+                utf16.push(0);
+                Ok(Some(utf16))
+            }
+            None => return Err("str conversaion failed")?,
+        },
+        None => Ok(None),
+    }
 }
 
 pub unsafe fn get_proc_address(

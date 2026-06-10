@@ -6,6 +6,8 @@ use core::{
 use std::{
     error::Error,
     ffi::CString,
+    os::unix::ffi::OsStrExt,
+    path::Path,
     sync::{Mutex, OnceLock},
 };
 
@@ -109,7 +111,10 @@ unsafe fn const_c_char_to_string(p: *const c_char) -> String {
     unsafe { CStr::from_ptr(p).to_string_lossy().to_string() }
 }
 
-pub unsafe fn do_dlopen(file: Option<&str>, mode: OpenMode) -> Result<*mut c_void, Box<dyn Error>> {
+pub unsafe fn do_dlopen<P: AsRef<Path>>(
+    file: Option<P>,
+    mode: OpenMode,
+) -> Result<*mut c_void, Box<dyn Error>> {
     let mode: c_int = match mode {
         OpenMode::Unix(v) => v,
         _ => return Err(format!("unsupported open mode type: {mode}").into()),
@@ -117,7 +122,7 @@ pub unsafe fn do_dlopen(file: Option<&str>, mode: OpenMode) -> Result<*mut c_voi
 
     let handle = match file {
         Some(p) => {
-            let path = CString::new(p)?;
+            let path = CString::new(p.as_ref().as_os_str().as_bytes())?;
 
             unsafe { dlopen(path.as_ptr(), mode) }
         }
