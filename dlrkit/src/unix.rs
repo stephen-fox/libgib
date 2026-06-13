@@ -85,6 +85,7 @@ extern "C" {
     fn dlclose(handle: *mut c_void) -> c_int;
 }
 
+#[repr(C)]
 pub struct DlInfo {
     pub dli_fname: *const c_char,
     pub dli_fbase: *mut c_void,
