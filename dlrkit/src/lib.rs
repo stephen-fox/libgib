@@ -122,9 +122,8 @@ impl Dl {
     ///
     /// ## Arguments
     ///
-    /// * file - The path to the dynamic library to load. On Unix-like
-    ///   systems this can be set to None, in which case a pointer to
-    ///   the process' executable will be returned.
+    /// * file - The path to the dynamic library to load. If set to
+    ///   None a pointer to the process' executable will be returned.
     /// * mode - Configures the behavior of the dynamic linker when
     ///   loading the library.
     pub unsafe fn open_mode<P: AsRef<Path>>(
@@ -140,7 +139,7 @@ impl Dl {
 
         #[cfg(windows)]
         unsafe {
-            result = windows::load_library_exw(file, core::ptr::null_mut(), mode)
+            result = windows::load_library_or_get_module_handle(file, mode)
         }
 
         Ok(Self { hnd: result? })

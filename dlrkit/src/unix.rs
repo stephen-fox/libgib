@@ -217,7 +217,7 @@ pub unsafe fn do_dlclose(handle: *mut c_void) -> Result<(), Box<dyn Error>> {
 
 static DLERROR_MUTEX: OnceLock<Mutex<u8>> = OnceLock::new();
 
-unsafe fn last_dlerror() -> Option<String> {
+pub unsafe fn last_dlerror() -> Option<String> {
     let mu = DLERROR_MUTEX.get_or_init(|| Mutex::new(0));
 
     let _mu = mu.lock().unwrap();
