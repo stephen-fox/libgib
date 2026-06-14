@@ -1,8 +1,12 @@
 [package]
 name = "mmor"
 description = """
-mmor provides an OS-agnostic library for enumering memory-mapped objects
-in the current process."""
+mmor provides an OS-agnostic API for enumerating memory-mapped objects
+in the current process and resolving a symbol's address to its name
+and parent library. Useful for finding the addresses of libraries or
+the process' executable, as well as mapping the process global offset
+table without hardcoding each entry's offset in the table in
+your program."""
 version = "0.1.0"
 edition = "2024"
 
