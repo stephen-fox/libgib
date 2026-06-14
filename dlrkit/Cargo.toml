@@ -1,8 +1,9 @@
 [package]
 name = "dlrkit"
 description = """
-dlrkit provides an OS-agnostic library for interacting with the dynamic linker
-and dynamically-loaded libraries in Rust with no external dependencies."""
+dlrkit provides an API for interacting with the dynamic linker and loading
+libraries at runtime, such as .so and .dlls. Useful for executing code from
+external libraries using the C ABI."""
 version = "0.1.0"
 edition = "2021"
 
