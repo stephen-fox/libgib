@@ -11,7 +11,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use crate::{OpenMode, SymInfo};
+use crate::OpenMode;
 
 pub const RTLD_NOW: c_int = {
     if cfg!(all(target_os = "android", target_pointer_width = "32")) {
@@ -93,25 +93,6 @@ pub struct DlInfo {
     pub dli_saddr: *mut c_void,
 }
 
-impl DlInfo {
-    unsafe fn to_sym_info(&self) -> SymInfo {
-        SymInfo {
-            object_name: unsafe { const_c_char_to_string(self.dli_fname) },
-            object_base_addr: self.dli_fbase,
-            sym_name: unsafe { const_c_char_to_string(self.dli_sname) },
-            sym_addr: self.dli_saddr,
-        }
-    }
-}
-
-unsafe fn const_c_char_to_string(p: *const c_char) -> String {
-    if p.is_null() {
-        return String::from("");
-    }
-
-    unsafe { CStr::from_ptr(p).to_string_lossy().to_string() }
-}
-
 pub unsafe fn do_dlopen<P: AsRef<Path>>(
     file: Option<P>,
     mode: OpenMode,
@@ -159,12 +140,6 @@ pub unsafe fn do_dlsym(handle: *mut c_void, symbol: &str) -> Result<*mut c_void,
     }
 
     Ok(symbol_ptr)
-}
-
-pub(crate) unsafe fn sym_by_addr(addr: usize) -> Result<SymInfo, Box<dyn Error>> {
-    let dl_info = unsafe { do_dladdr(addr as *const c_void)? };
-
-    Ok(unsafe { dl_info.to_sym_info() })
 }
 
 pub unsafe fn do_dladdr(addr: *const c_void) -> Result<DlInfo, Box<dyn Error>> {

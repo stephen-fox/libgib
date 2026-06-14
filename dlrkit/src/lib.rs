@@ -13,59 +13,6 @@ pub mod unix;
 #[cfg(windows)]
 pub mod windows;
 
-/// sym_by_addr looks up the symbol corresponding to the specified
-/// memory address.
-///
-/// ## Safety
-///
-/// This function is unsafe because it relies on OS APIs that
-/// provide no memory safety assurances.
-///
-/// ## Arguments
-///
-/// * `addr` - The memory address of the symbol to lookup.
-///
-/// TODO: Windows support, see GetModuleHandleExW:
-/// https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw
-#[cfg(unix)]
-pub unsafe fn sym_by_addr(addr: usize) -> Result<SymInfo, Box<dyn Error>> {
-    unsafe { unix::sym_by_addr(addr) }
-}
-
-/// SymInfo represents information about a symbol.
-pub struct SymInfo {
-    /// object_name is the name of the symbol's parent object.
-    pub object_name: String,
-
-    /// object_base_addr is the base address of the symbol's
-    /// parent object.
-    pub object_base_addr: *const c_void,
-
-    /// sym_name is the name of the symbol.
-    pub sym_name: String,
-
-    /// sym_addr is the address of the symbol.
-    pub sym_addr: *const c_void,
-}
-
-impl std::fmt::Display for SymInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "object_name: '{}' | ", self.object_name)?;
-
-        write!(
-            f,
-            "object_base_addr: 0x{:x?} | ",
-            self.object_base_addr as usize
-        )?;
-
-        write!(f, "sym_name: '{}' | ", self.sym_name)?;
-
-        write!(f, "sym_addr: 0x{:x?}", self.sym_addr as usize)?;
-
-        Ok(())
-    }
-}
-
 /// OpenMode specifies the behavior for the Dl::open_mode function.
 pub enum OpenMode {
     Unix(c_int),
