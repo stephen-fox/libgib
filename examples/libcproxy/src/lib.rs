@@ -75,8 +75,8 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
     unsafe {
         mrevise::mop(
             mrevise::MopConfig {
-                pointer: got_addr as *mut c_void,
-                size: 0x4000 - 0x3f60,
+                pointer: got_addr as *const (),
+                size: got_size,
                 align_to: Some(4096),
                 prot_before: mrevise::MaybeProt::ChangeTo(mrevise::Prot::ReadWrite),
                 prot_after: mrevise::MaybeProt::ChangeTo(mrevise::Prot::Read),
@@ -86,6 +86,10 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
                 let max = addr.addr() + got_size;
 
                 eprintln!("current: 0x{:x?} | max: 0x{:x?}", current, max);
+
+                let symbolizer = mmor::Symbolizer::new().map_err(|err| {
+                    std::io::Error::other(format!("failed to create symbolizer - {err}"))
+                })?;
 
                 // Search for the sendfile64 global offset table entry.
                 while current < max {
@@ -99,11 +103,11 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
                         continue;
                     }
 
-                    let info = match dlrkit::sym_by_addr(entry_value) {
+                    let info = match symbolizer.by_addr(entry_value) {
                         Ok(i) => i,
                         Err(err) => {
                             return Err(std::io::Error::other(format!(
-                                "failed to dladdr malloc entry - {err}"
+                                "failed to lookup got entry: {current} - {err}"
                             )))?;
                         }
                     };
