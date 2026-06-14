@@ -1,0 +1,17 @@
+[package]
+name = "aomlib"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+server = { path = "../server" }
+mmor = { version = "0.1.0", path = "../../../mmor" }
+mrevise = { version = "0.1.0", path = "../../../mrevise" }
+
+[lib]
+crate-type = ["cdylib"]
+name = "version"
+
+[features]
+debug = []

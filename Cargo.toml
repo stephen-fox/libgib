@@ -1,3 +1,12 @@
 [workspace]
-members = [ "dlrkit", "mmor", "mrevise" , "afnative", "examples/*" ]
+members = [
+  "dlrkit",
+  "mmor",
+  "mrevise" ,
+  "afnative",
+  "examples/libcproxy",
+  "examples/aom-dll-hijack/aomlib",
+  "examples/aom-dll-hijack/client",
+  "examples/aom-dll-hijack/server",
+]
 resolver = "3"

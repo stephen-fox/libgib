@@ -3,17 +3,6 @@
 version = 4
 
 [[package]]
-name = "libcproxy"
-version = "0.1.0"
-dependencies = [
- "ctor",
- "dlrkit",
- "mmor",
- "mrevise",
- "rsbmalloc",
-]
-
-[[package]]
 name = "ctor"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -68,6 +57,17 @@ name = "libc"
 version = "0.2.171"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c19937216e9d3aa9956d9bb8dfc0b0c8beb6058fc4f7a4dc4d850edf86a237d6"
+
+[[package]]
+name = "libcproxy"
+version = "0.1.0"
+dependencies = [
+ "ctor",
+ "dlrkit",
+ "mmor",
+ "mrevise",
+ "rsbmalloc",
+]
 
 [[package]]
 name = "mmor"

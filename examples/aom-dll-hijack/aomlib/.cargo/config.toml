@@ -1,0 +1,2 @@
+[alias]
+build_lib = "build -p aomlib --target i686-pc-windows-msvc"

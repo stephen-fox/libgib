@@ -1,0 +1,11 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+afnative = { version = "0.1.0", path = "../../../afnative" }
+
+[[bin]]
+name = "testsrv"
+path = "src/testsrv.rs"
