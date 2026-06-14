@@ -68,13 +68,13 @@ unsafe extern "C" fn callback(
     0
 }
 
-pub unsafe fn sym_by_addr(addr: usize) -> Result<SymInfo, Box<dyn Error>> {
+pub unsafe fn sym_from_addr(addr: usize) -> Result<SymInfo, Box<dyn Error>> {
     let dl_info = unsafe { dlrkit::unix::do_dladdr(addr as *const c_void)? };
 
-    Ok(unsafe { to_sym_info(dl_info) })
+    Ok(unsafe { dlinfo_to_sym_info(dl_info) })
 }
 
-unsafe fn to_sym_info(info: dlrkit::unix::DlInfo) -> SymInfo {
+unsafe fn dlinfo_to_sym_info(info: dlrkit::unix::DlInfo) -> SymInfo {
     SymInfo {
         object_name: unsafe { const_c_char_to_string(info.dli_fname) },
         object_base_addr: info.dli_fbase.addr(),
@@ -83,10 +83,10 @@ unsafe fn to_sym_info(info: dlrkit::unix::DlInfo) -> SymInfo {
     }
 }
 
-unsafe fn const_c_char_to_string(p: *const c_char) -> String {
-    if p.is_null() {
+unsafe fn const_c_char_to_string(ptr: *const c_char) -> String {
+    if ptr.is_null() {
         return String::from("");
     }
 
-    unsafe { CStr::from_ptr(p).to_string_lossy().to_string() }
+    unsafe { CStr::from_ptr(ptr).to_string_lossy().to_string() }
 }

@@ -12,6 +12,11 @@ pub mod windows;
 /// objects enumerates the memory-mapped objects in the current process.
 ///
 /// It is a wrapper for the objects_with_options function.
+///
+/// ## Safety
+///
+/// This function is unsafe because it relies on OS APIs that
+/// provide no memory safety assurances.
 pub unsafe fn objects() -> Result<Objects, Box<dyn Error>> {
     unsafe {
         objects_with_options(ObjectLookupOptions {
@@ -33,6 +38,16 @@ pub struct ObjectLookupOptions {
 
 /// objects_with_otions enumerates the memory-mapped objects in the
 /// current process.
+///
+/// ## Safety
+///
+/// This function is unsafe because it relies on OS APIs that
+/// provide no memory safety assurances.
+///
+/// ## Arguments
+///
+/// * `options` - A struct that customizes the behavior of
+///   this function.
 pub unsafe fn objects_with_options(
     options: ObjectLookupOptions,
 ) -> Result<Objects, Box<dyn Error>> {
@@ -104,6 +119,12 @@ pub struct Symbolizer {
 }
 
 impl Symbolizer {
+    /// new instantiates a new instance of a Symbolizer.
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe because it relies on OS APIs that
+    /// provide no memory safety assurances.
     pub unsafe fn new() -> Result<Self, Box<dyn Error>> {
         #[cfg(windows)]
         {
@@ -119,7 +140,7 @@ impl Symbolizer {
         }
     }
 
-    /// sym_by_addr looks up the symbol corresponding to the specified
+    /// by_addr looks up the symbol corresponding to the specified
     /// memory address.
     ///
     /// ## Safety
@@ -133,7 +154,7 @@ impl Symbolizer {
     pub unsafe fn by_addr(&self, addr: usize) -> Result<SymInfo, Box<dyn Error>> {
         #[cfg(unix)]
         unsafe {
-            unix::sym_by_addr(addr)
+            unix::sym_from_addr(addr)
         }
 
         #[cfg(windows)]
