@@ -1,8 +1,10 @@
 [package]
 name = "mrevise"
 description = """
-mrevise abstracts modifying process memory on Unix-like systems and Windows.
-It is a fork of Jacob Read's 'mem' crate from their Pocket Relay project."""
+mrevise abstracts operating on the current process' memory, including:
+modifying memory protections (permissions), allocating memory, and
+finding byte patterns. This library is a fork of Jacob Read's 'mem'
+crate from their Pocket Relay project."""
 version = "0.1.0"
 edition = "2024"
 
