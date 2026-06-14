@@ -410,36 +410,3 @@ struct SYMBOL_INFO {
     // - https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Debug/struct.SYMBOL_INFO_PACKAGE.html
     Name: [u8; MAX_SYM_NAME],
 }
-
-struct SymbolInfoBuf {
-    buf: Vec<c_char>,
-}
-
-impl SymbolInfoBuf {
-    fn new() -> Self {
-        let size = std::mem::size_of::<SYMBOL_INFO>() + MAX_SYM_NAME + 1;
-        let mut buf: Vec<c_char> = vec![0; size];
-
-        let hdr = unsafe { &mut *(buf.as_mut_ptr() as *mut SYMBOL_INFO) };
-        hdr.SizeOfStruct = std::mem::size_of::<SYMBOL_INFO>() as u32;
-        hdr.MaxNameLen = MAX_SYM_NAME as u32;
-
-        Self { buf }
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut SYMBOL_INFO {
-        self.buf.as_mut_ptr() as *mut SYMBOL_INFO
-    }
-
-    fn header(&self) -> &SYMBOL_INFO {
-        unsafe { &*(self.buf.as_ptr() as *const SYMBOL_INFO) }
-    }
-
-    fn name(&self) -> &CStr {
-        let name_offset = std::mem::size_of::<SYMBOL_INFO>();
-
-        let name_ptr = unsafe { self.buf.as_ptr().add(name_offset) };
-
-        unsafe { CStr::from_ptr(name_ptr) }
-    }
-}
