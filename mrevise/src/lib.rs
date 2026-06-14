@@ -3,7 +3,7 @@ use std::error::Error;
 #[cfg(unix)]
 pub mod unix;
 
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 pub mod windows;
 
 /// find_pattern attempts to find a matching pattern anywhere between
@@ -58,9 +58,22 @@ pub unsafe fn compare_mask(addr: *const u8, mask: &'static str, bytes: &'static 
         .all(|((offset, mask), op)| mask == '?' || unsafe { *addr.add(offset) } == op)
 }
 
-/// MopConfig configures the behavior of the mop function.
+/// MopConfig defines the bounds of a memory chunk to operate on and
+/// configures the behavior of the mop function.
 pub struct MopConfig<P> {
-    /// pointer is the memory address to operate on.
+    /// pointer is the address of the memory chunk to operate on.
+    ///
+    /// If you are only interested in expressing a memory address
+    /// without any assoicated data type (for example, if the
+    /// address is a usize type), this value can be expressed as:
+    ///
+    /// ```
+    /// pointer: addr as *const ()
+    /// ```
+    ///
+    /// ... where "addr" is the name of a usize variable containing
+    /// the address. The pointed-to address can be retrived using
+    /// Rust's "addr" method.
     pub pointer: *const P,
 
     /// size is the size of the chunk in bytes.
@@ -68,6 +81,10 @@ pub struct MopConfig<P> {
 
     /// allign_to is an optional boundary to align the chunk's
     /// end address to.
+    ///
+    /// This is typically be set to the platform's page size,
+    /// which is commonly (but not always!) 4096 bits. Or, in
+    /// other words: `Some(4096)`
     pub align_to: Option<usize>,
 
     /// prot_before is the memory protection setting to apply
@@ -220,8 +237,8 @@ where
     }
 }
 
-/// protect modifies the protections of a memory chunk for the current
-/// process.
+/// protect modifies the protection settings of a memory chunk for the
+/// current process.
 ///
 /// It provides identical functionality to the mprotect(2) system call
 /// on Unix-like systems and the Windows VirtualProtect function.
@@ -234,10 +251,12 @@ where
 ///
 /// ## Arguments
 ///
-/// * `pointer`     - The memory address to operate on
-/// * `size`        - The size of the memory chunk to operate on
-/// * `prot`        - The memory protection to apply to the memory chunk
-/// * `allign_with` - An optional boundary to align the chunk to
+/// * `pointer` - The memory address to operate on.
+/// * `size` - The size of the memory chunk to operate on.
+/// * `prot` - The memory protection to apply to the memory chunk.
+/// * `allign_with` - An optional boundary to align the chunk to. This is
+///   typically be set to the platform's page size, which is commonly (but
+///   not always!) 4096 bits. Or, in other words: `Some(4096)`
 pub fn protect<P>(
     pointer: *mut P,
     size: usize,
@@ -257,7 +276,7 @@ pub fn protect<P>(
     #[cfg(unix)]
     let result = unix::protect(target_ptr, chunk_size, prot);
 
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     let result = windows::protect(target_ptr, chunk_size, prot);
 
     result
@@ -304,11 +323,6 @@ pub fn alloc<P>(
     result
 }
 
-struct AlignToOutput<P> {
-    new_ptr: *mut P,
-    size_to_modify: usize,
-}
-
 fn align_to<P>(pointer: *mut P, bits: usize, chunk_size: usize) -> AlignToOutput<P> {
     let current_addr = pointer.addr();
 
@@ -331,6 +345,11 @@ fn align_to<P>(pointer: *mut P, bits: usize, chunk_size: usize) -> AlignToOutput
         new_ptr: new_addr as *mut P,
         size_to_modify: diff + chunk_size,
     }
+}
+
+struct AlignToOutput<P> {
+    new_ptr: *mut P,
+    size_to_modify: usize,
 }
 
 fn last_error(prefix: &str) -> std::io::Error {
