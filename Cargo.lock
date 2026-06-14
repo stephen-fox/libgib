@@ -38,6 +38,7 @@ dependencies = [
 name = "mmor"
 version = "0.1.0"
 dependencies = [
+ "dlrkit",
  "libc",
 ]
 

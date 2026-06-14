@@ -8,3 +8,6 @@ edition = "2024"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.171"
+
+[dependencies]
+dlrkit = { version = "0.1.0", path = "../dlrkit" }

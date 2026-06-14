@@ -1,8 +1,12 @@
 use core::ffi::c_void;
 
-use std::{error::Error, ffi::CStr, path::PathBuf};
+use std::{
+    error::Error,
+    ffi::{CStr, c_char},
+    path::PathBuf,
+};
 
-use crate::{path_basename, Object, ObjectLookupOptions, Objects};
+use crate::{Object, ObjectLookupOptions, Objects, SymInfo, path_basename};
 
 pub unsafe fn objects(_: ObjectLookupOptions) -> Result<Objects, Box<dyn Error>> {
     let mut objects = Objects {
@@ -62,4 +66,27 @@ unsafe extern "C" fn callback(
     });
 
     0
+}
+
+pub unsafe fn sym_by_addr(addr: usize) -> Result<SymInfo, Box<dyn Error>> {
+    let dl_info = unsafe { dlrkit::unix::do_dladdr(addr as *const c_void)? };
+
+    Ok(unsafe { to_sym_info(dl_info) })
+}
+
+unsafe fn to_sym_info(info: dlrkit::unix::DlInfo) -> SymInfo {
+    SymInfo {
+        object_name: unsafe { const_c_char_to_string(info.dli_fname) },
+        object_base_addr: info.dli_fbase.addr(),
+        sym_name: unsafe { const_c_char_to_string(info.dli_sname) },
+        sym_addr: info.dli_saddr.addr(),
+    }
+}
+
+unsafe fn const_c_char_to_string(p: *const c_char) -> String {
+    if p.is_null() {
+        return String::from("");
+    }
+
+    unsafe { CStr::from_ptr(p).to_string_lossy().to_string() }
 }

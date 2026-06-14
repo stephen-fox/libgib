@@ -1,11 +1,15 @@
 #![allow(non_snake_case)]
 
-use core::{ffi::c_void, ptr};
+use core::{
+    ffi::{CStr, c_char, c_void},
+    ptr,
+};
 
 use std::{error::Error, mem::size_of, path::PathBuf};
 
-use crate::{path_basename, Object, ObjectLookupOptions, Objects};
+use crate::{Object, ObjectLookupOptions, Objects, SymInfo, path_basename};
 
+// EnumProcessModules flags.
 const ENUM_PROCESS_MODULES_FILTER_FLAG: u32 = {
     if cfg!(target_pointer_width = "32") {
         0x01 // LIST_MODULES_32BIT
@@ -13,6 +17,11 @@ const ENUM_PROCESS_MODULES_FILTER_FLAG: u32 = {
         0x03 // LIST_MODULES_ALL
     }
 };
+
+// dbghelp constants.
+const MAX_SYM_NAME: usize = 2000;
+const SYMOPT_UNDNAME: u32 = 0x00000002;
+const SYMOPT_DEFERRED_LOADS: u32 = 0x00000004;
 
 #[link(name = "kernel32")]
 unsafe extern "system" {
@@ -69,6 +78,26 @@ unsafe extern "system" {
         lpModuleInfo: *mut MODULEINFO,
         cb: u32,
     ) -> bool;
+}
+
+#[link(name = "dbghelp")]
+unsafe extern "system" {
+    fn SymSetOptions(symoptions: u32) -> u32;
+
+    fn SymInitialize(
+        hprocess: *mut c_void,
+        user_search_path: *const c_char,
+        finvadeprocess: i32,
+    ) -> bool;
+
+    fn SymFromAddr(
+        hProcess: *mut c_void,
+        address: u64,
+        displacement: *mut u64,
+        symbol: *mut SYMBOL_INFO,
+    ) -> bool;
+
+    fn SymCleanup(hprocess: *mut c_void) -> i32;
 }
 
 pub unsafe fn objects(options: ObjectLookupOptions) -> Result<Objects, Box<dyn Error>> {
@@ -256,4 +285,161 @@ fn get_module_info(
     }
 
     Ok(mod_info)
+}
+
+pub struct DbgHelpSession {
+    proc: *mut c_void,
+}
+
+impl DbgHelpSession {
+    pub unsafe fn new(search_path: Option<&CStr>) -> Result<Self, Box<dyn Error>> {
+        unsafe { SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS) };
+
+        let proc = unsafe { GetCurrentProcess() };
+        let path_ptr = search_path.map(|s| s.as_ptr()).unwrap_or(std::ptr::null());
+
+        if unsafe { !SymInitialize(proc, path_ptr, 1) } {
+            return Err(format!(
+                "SymInitialize failed - {}",
+                std::io::Error::last_os_error()
+            ))?;
+        }
+
+        Ok(Self { proc })
+    }
+
+    pub unsafe fn sym_from_addr(&self, addr: usize) -> Result<SymInfo, Box<dyn Error>> {
+        let mut sym_info_header = SYMBOL_INFO {
+            SizeOfStruct: (std::mem::size_of::<SYMBOL_INFO>() - MAX_SYM_NAME) as u32,
+            TypeIndex: 0,
+            Reserved: [0; 2],
+            Index: 0,
+            Size: 0,
+            ModBase: 0,
+            Flags: 0,
+            Value: 0,
+            Address: 0,
+            Register: 0,
+            Scope: 0,
+            Tag: 0,
+            NameLen: 0,
+            MaxNameLen: (MAX_SYM_NAME - 1) as u32,
+            Name: [0; MAX_SYM_NAME],
+        };
+
+        let mut displacement: u64 = 0;
+
+        if unsafe {
+            !SymFromAddr(
+                self.proc,
+                addr as u64,
+                &mut displacement,
+                &mut sym_info_header,
+            )
+        } {
+            return Err(format!(
+                "SymFromAddr failed - {}",
+                std::io::Error::last_os_error()
+            ))?;
+        }
+
+        let parent_module = unsafe {
+            dlrkit::windows::get_module_handle_exw(
+                dlrkit::windows::GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT
+                    | dlrkit::windows::GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                Some(dlrkit::windows::GetModuleHandleModuleName::Address(addr)),
+            )
+            .map_err(|err| format!("failed to get parent module - {err}"))?
+        };
+
+        let object_info = lookup_module(self.proc, parent_module)
+            .map_err(|err| format!("failed to lookup parent module info - {err}"))?;
+
+        let mut sym_name = String::with_capacity(sym_info_header.NameLen as usize);
+
+        for i in 0..sym_name.capacity() {
+            sym_name.push(sym_info_header.Name[i] as char);
+        }
+
+        Ok(SymInfo {
+            object_name: object_info.name.unwrap_or(String::new()),
+            object_base_addr: object_info.addr,
+            sym_name: sym_name,
+            sym_addr: addr,
+        })
+    }
+}
+
+impl Drop for DbgHelpSession {
+    fn drop(&mut self) {
+        unsafe {
+            SymCleanup(self.proc);
+        }
+    }
+}
+
+// Refer to this document:
+// https://learn.microsoft.com/en-us/windows/win32/api/dbghelp/ns-dbghelp-symbol_info
+#[repr(C)]
+struct SYMBOL_INFO {
+    SizeOfStruct: u32,
+    TypeIndex: u32,
+    Reserved: [u64; 2],
+    Index: u32,
+    Size: u32,
+    ModBase: u64,
+    Flags: u32,
+    Value: u64,
+    Address: u64,
+    Register: u32,
+    Scope: u32,
+    Tag: u32,
+    NameLen: u32,
+    MaxNameLen: u32,
+    // The Microsoft documentation seems to include a one byte
+    // field named "Name", but makes not mention about how to
+    // allocate space for it. I found an example online that
+    // mentioned the "CSymbolInfoPackage" type and the author's
+    // comment mentioned it has enough space for a name. That
+    // led me to some Rust code that had created a second struct
+    // which jammed the Name field onto the end, which is what
+    // we do below.
+    //
+    // References:
+    // - https://www.debuginfo.com/examples/src/SymFromAddr.cpp
+    // - https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Debug/struct.SYMBOL_INFO_PACKAGE.html
+    Name: [u8; MAX_SYM_NAME],
+}
+
+struct SymbolInfoBuf {
+    buf: Vec<c_char>,
+}
+
+impl SymbolInfoBuf {
+    fn new() -> Self {
+        let size = std::mem::size_of::<SYMBOL_INFO>() + MAX_SYM_NAME + 1;
+        let mut buf: Vec<c_char> = vec![0; size];
+
+        let hdr = unsafe { &mut *(buf.as_mut_ptr() as *mut SYMBOL_INFO) };
+        hdr.SizeOfStruct = std::mem::size_of::<SYMBOL_INFO>() as u32;
+        hdr.MaxNameLen = MAX_SYM_NAME as u32;
+
+        Self { buf }
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut SYMBOL_INFO {
+        self.buf.as_mut_ptr() as *mut SYMBOL_INFO
+    }
+
+    fn header(&self) -> &SYMBOL_INFO {
+        unsafe { &*(self.buf.as_ptr() as *const SYMBOL_INFO) }
+    }
+
+    fn name(&self) -> &CStr {
+        let name_offset = std::mem::size_of::<SYMBOL_INFO>();
+
+        let name_ptr = unsafe { self.buf.as_ptr().add(name_offset) };
+
+        unsafe { CStr::from_ptr(name_ptr) }
+    }
 }

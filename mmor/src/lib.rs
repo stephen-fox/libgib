@@ -96,3 +96,83 @@ pub(crate) fn path_basename(pathbuf: &Path) -> Option<String> {
 
     None
 }
+
+/// Symbolizer looks up symbols.
+pub struct Symbolizer {
+    #[cfg(windows)]
+    dbg: windows::DbgHelpSession,
+}
+
+impl Symbolizer {
+    pub unsafe fn new() -> Result<Self, Box<dyn Error>> {
+        #[cfg(windows)]
+        {
+            let session = unsafe { windows::DbgHelpSession::new(None) }
+                .map_err(|err| format!("failed to create dbg help session - {err}"))?;
+
+            return Ok(Self { dbg: session });
+        }
+
+        #[cfg(unix)]
+        {
+            return Ok(Self {});
+        }
+    }
+
+    /// sym_by_addr looks up the symbol corresponding to the specified
+    /// memory address.
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe because it relies on OS APIs that
+    /// provide no memory safety assurances.
+    ///
+    /// ## Arguments
+    ///
+    /// * `addr` - The memory address of the symbol to lookup.
+    pub unsafe fn by_addr(&self, addr: usize) -> Result<SymInfo, Box<dyn Error>> {
+        #[cfg(unix)]
+        unsafe {
+            unix::sym_by_addr(addr)
+        }
+
+        #[cfg(windows)]
+        unsafe {
+            self.dbg.sym_from_addr(addr)
+        }
+    }
+}
+
+/// SymInfo represents information about a symbol.
+pub struct SymInfo {
+    /// object_name is the name of the symbol's parent object.
+    pub object_name: String,
+
+    /// object_base_addr is the base address of the symbol's
+    /// parent object.
+    pub object_base_addr: usize,
+
+    /// sym_name is the name of the symbol.
+    pub sym_name: String,
+
+    /// sym_addr is the address of the symbol.
+    pub sym_addr: usize,
+}
+
+impl std::fmt::Display for SymInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "object_name: '{}' | ", self.object_name)?;
+
+        write!(
+            f,
+            "object_base_addr: 0x{:x?} | ",
+            self.object_base_addr as usize
+        )?;
+
+        write!(f, "sym_name: '{}' | ", self.sym_name)?;
+
+        write!(f, "sym_addr: 0x{:x?}", self.sym_addr as usize)?;
+
+        Ok(())
+    }
+}
