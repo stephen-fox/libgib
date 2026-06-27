@@ -6,5 +6,7 @@ like Unix sockets and Windows named pipes."""
 edition = "2024"
 version.workspace = true
 authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]

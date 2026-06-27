@@ -14,3 +14,9 @@ resolver = "3"
 [workspace.package]
 version = "0.1.0"
 authors = ["Stephen Fox Jr. <stephen.j.fox.jr@gmail.com>"]
+license = "MIT"
+description = """
+libgib is a collection of Rust libraries that provide an OS-agnostic
+API for manipulating process memory on Unix-like and Windows operating
+systems using minimal external dependencies."""
+repository = "https://codeberg.org/stephen-fox/libgib"

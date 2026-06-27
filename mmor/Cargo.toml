@@ -10,6 +10,8 @@ your program."""
 edition = "2024"
 version.workspace = true
 authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.171"

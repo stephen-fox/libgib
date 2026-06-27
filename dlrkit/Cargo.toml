@@ -7,6 +7,8 @@ code from external libraries using the C ABI."""
 edition = "2021"
 version.workspace = true
 authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 
