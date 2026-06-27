@@ -2,10 +2,11 @@
 name = "dlrkit"
 description = """
 dlrkit provides an API for interacting with the dynamic linker and loading
-libraries at runtime, such as .so and .dlls. Useful for executing code from
-external libraries using the C ABI."""
-version = "0.1.0"
+libraries at runtime such as .so files and .dll files. Useful for executing
+code from external libraries using the C ABI."""
 edition = "2021"
+version.workspace = true
+authors.workspace = true
 
 [dependencies]
 

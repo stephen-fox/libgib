@@ -7,8 +7,9 @@ and parent library. Useful for finding the addresses of libraries or
 the process' executable, as well as mapping the process global offset
 table without hardcoding each entry's offset in the table in
 your program."""
-version = "0.1.0"
 edition = "2024"
+version.workspace = true
+authors.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.171"
