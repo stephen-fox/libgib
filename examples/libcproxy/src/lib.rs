@@ -75,15 +75,13 @@ fn library_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
     unsafe {
         mrevise::mop(
             mrevise::MopConfig {
-                pointer: got_addr as *const (),
-                size: got_size,
-                align_to: Some(4096),
+                chunk: mrevise::Chunk::from(got_addr, got_size, mrevise::AlignBits::AlignTo(4096)),
                 prot_before: mrevise::MaybeProt::ChangeTo(mrevise::Prot::ReadWrite),
                 prot_after: mrevise::MaybeProt::ChangeTo(mrevise::Prot::Read),
             },
-            |addr| {
-                let mut current = addr.addr();
-                let max = addr.addr() + got_size;
+            |chunk| {
+                let mut current = chunk.pointer.addr();
+                let max = current + got_size;
 
                 eprintln!("current: 0x{:x?} | max: 0x{:x?}", current, max);
 
@@ -176,27 +174,35 @@ fn plaid_ctf_on_load_with_err() -> Result<(), Box<dyn Error>> {
     // 0x3f58 - 0x4000  .got
     let got_addr = exe_addr + 0x3f58;
 
-    let got = got_addr as *mut c_void;
+    //let got = got_addr as *mut c_void;
+
+    let got = got_addr as *const [u8; 0x4000 - 0x3f58];
 
     eprintln!("DEBUG: exe: 0x{:x?} | got: 0x{:x?}", exe_addr, got_addr);
 
     unsafe {
         mrevise::mop(
             mrevise::MopConfig {
-                pointer: got,
-                size: 0x4000 - 0x3f58,
-                align_to: Some(4096),
+                chunk: mrevise::Chunk::from_ptr(got, mrevise::AlignBits::AlignTo(4096)),
                 prot_before: mrevise::MaybeProt::ChangeTo(mrevise::Prot::ReadWrite),
                 prot_after: mrevise::MaybeProt::ChangeTo(mrevise::Prot::Read),
             },
-            |addr| {
+            |chunk| {
                 // malloc = got + 0x50.
-                let malloc = swap_got_entry("malloc", addr.add(0x50), fake_malloc as *mut c_void);
+                let malloc = swap_got_entry(
+                    "malloc",
+                    chunk.pointer.add(0x50) as *mut c_void,
+                    fake_malloc as *mut c_void,
+                );
 
                 MALLOC_PTR = Some(std::mem::transmute_copy(&malloc));
 
                 // fgets = got + 0x40.
-                let fgets = swap_got_entry("fgets", addr.add(0x40), fake_fgets as *mut c_void);
+                let fgets = swap_got_entry(
+                    "fgets",
+                    chunk.pointer.add(0x40) as *mut c_void,
+                    fake_fgets as *mut c_void,
+                );
 
                 FGETS_PTR = Some(std::mem::transmute_copy(&fgets));
 

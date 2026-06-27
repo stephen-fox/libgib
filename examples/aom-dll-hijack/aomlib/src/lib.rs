@@ -88,15 +88,29 @@ fn attach_with_error() -> Result<(), Box<dyn Error>> {
     unsafe {
         mrevise::mop(
             mrevise::MopConfig {
-                pointer: memcpy_import_ptr,
-                size: 4,
-                align_to: None,
+                chunk: mrevise::Chunk::from_ptr_sized_to(
+                    memcpy_import_ptr,
+                    4,
+                    mrevise::AlignBits::DoNotAlign,
+                ),
                 prot_before: mrevise::MaybeProt::ChangeTo(mrevise::Prot::ReadWrite),
                 prot_after: mrevise::MaybeProt::DoNotChange,
             },
-            |addr| {
+            |chunk| {
                 let fake = fake_memcpy as *const ();
-                *addr = fake.addr() as u32;
+                *chunk.pointer.cast_mut() = fake.addr() as u32;
+
+                //let mut tmp = addr;
+
+                //for i in 0..10 {
+                //    tmp = tmp.add(4);
+                //    let x = read_ptr(tmp as *mut c_void);
+
+                //    if let Ok(info) = symbolizer.by_addr(x) {
+                //        dbg_msg_box(format!("info for obj {} : {}", i, info));
+                //    }
+                //}
+
                 Ok(())
             },
         )
@@ -139,4 +153,14 @@ fn msg_box(msg: String) {
     unsafe {
         MessageBoxW(0, msg.as_ptr(), title.as_ptr(), 0);
     };
+}
+
+unsafe fn read_ptr(from: *mut c_void) -> usize {
+    let mut addr_bytes: [u8; 4] = [0; 4];
+
+    unsafe {
+        std::ptr::copy_nonoverlapping(from as *mut u8, addr_bytes.as_mut_ptr(), addr_bytes.len())
+    };
+
+    u32::from_le_bytes(addr_bytes) as usize
 }

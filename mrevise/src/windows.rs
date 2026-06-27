@@ -1,13 +1,10 @@
 // PAGE_PROTECTION_FLAGS = u32
 
-use core::{
-    ffi::c_void,
-    ptr::null_mut,
-};
+use core::{ffi::c_void, ptr::null_mut};
 
 use std::error::Error;
 
-use super::{last_error, AllocFlags, Prot, ProtectResult};
+use super::{AllocFlags, Prot, ProtectResult, last_error};
 
 const MEM_COMMIT: u32 = 0x00001000;
 const MEM_RESERVE: u32 = 0x00002000;
@@ -29,12 +26,13 @@ unsafe extern "system" {
     ) -> *mut c_void;
 }
 
-pub fn protect<P>(addr: *mut P, size: usize, prot: Prot) -> Result<ProtectResult, Box<dyn Error>> {
+pub fn protect(addr: usize, size: usize, prot: Prot) -> Result<ProtectResult, Box<dyn Error>> {
     let windows_prot: u32 = prot_to_windows_const(prot);
 
     let mut old_protect: u32 = 0;
 
-    let result = unsafe { VirtualProtect(addr.cast(), size, windows_prot, &mut old_protect) };
+    let result =
+        unsafe { VirtualProtect(addr as *mut c_void, size, windows_prot, &mut old_protect) };
     if !result {
         return Err(last_error("VirtualProtect failed"))?;
     }

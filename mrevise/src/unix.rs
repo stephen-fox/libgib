@@ -5,7 +5,7 @@ use core::{
 
 use std::error::Error;
 
-use super::{last_error, AllocFlags, Prot, ProtectResult};
+use super::{AllocFlags, Prot, ProtectResult, last_error};
 
 const PROT_NONE: c_int = 0x0;
 const PROT_READ: c_int = 0x1;
@@ -32,7 +32,7 @@ unsafe extern "C" {
     ) -> *mut c_void;
 }
 
-pub fn protect<P>(addr: *mut P, size: usize, prot: Prot) -> Result<ProtectResult, Box<dyn Error>> {
+pub fn protect(addr: usize, size: usize, prot: Prot) -> Result<ProtectResult, Box<dyn Error>> {
     let c_prot: c_int = match prot {
         Prot::None => PROT_NONE,
         Prot::Read => PROT_READ,
@@ -41,7 +41,7 @@ pub fn protect<P>(addr: *mut P, size: usize, prot: Prot) -> Result<ProtectResult
         Prot::Custom(v) => v as c_int,
     };
 
-    let result = unsafe { mprotect(addr.cast(), size, c_prot) };
+    let result = unsafe { mprotect(addr as *mut c_void, size, c_prot) };
     if result != 0 {
         return Err(last_error("mprotect failed"))?;
     }
