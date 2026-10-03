@@ -28,6 +28,9 @@ pub mod windows;
 ///
 /// # Examples
 ///
+/// Find the address of a local variable with
+/// a value of 0xdeadbeef:
+///
 /// ```no_run
 /// fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     let example: u64 = 0xdeadbeef;
@@ -122,7 +125,7 @@ pub struct MopConfig<P> {
     ///
     /// This is typically be set to the platform's page size,
     /// which is commonly (but not always!) 4096 bits. Or, in
-    /// other words: `Some(4096)`
+    /// other words: `Some(4096)` or `Some(0x1000)`
     pub align_to: Option<usize>,
 
     /// prot_before is the memory protection setting to apply
@@ -204,23 +207,37 @@ impl std::fmt::Display for Prot {
 ///
 /// # Examples
 ///
-/// ```no_run
-/// unsafe {
-///     mrevise::mop(mrevise::MopConfig{
-///         mrevise::MopConfig {
-///             pointer: 0xdeadbeef as *const u64,
-///             size: 9001,
-///             align_to: Some(4096),
-///             prot_before: mrevise::MaybeProt::ChangeTo(mrevise::Prot::ReadWrite),
-///             prot_after: mrevise::MaybeProt::ChangeTo(mrevise::Prot::Read),
-///         },
-///         |addr| {
-///             *addr = 0x8badf00d;
+/// Change a read-only global variable's value to 0xdeadbeef.
 ///
-///             Ok(())
-///         }
-///     })
-/// };
+/// ```no_run
+/// static EXAMPLE: u64 = 0x00;
+///
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // This will output: 0x0.
+///     eprintln!("value before: {EXAMPLE:#x?}");
+///
+///     unsafe {
+///         mrevise::mop(
+///             mrevise::MopConfig {
+///                 pointer: std::ptr::addr_of!(EXAMPLE),
+///                 size: 8,
+///                 align_to: Some(4096),
+///                 prot_before: mrevise::MaybeProt::ChangeTo(mrevise::Prot::ReadWrite),
+///                 prot_after: mrevise::MaybeProt::ChangeTo(mrevise::Prot::Read),
+///             },
+///             |example_ptr| {
+///                 *example_ptr = 0xdeadbeef;
+///
+///                 Ok(())
+///             },
+///         )
+///     }?;
+///
+///     // This outputs: 0xdeadbeef.
+///     eprintln!("value after: {EXAMPLE:#x?}");
+///
+///     Ok(())
+/// }
 /// ```
 #[inline]
 pub unsafe fn mop<F, P>(config: MopConfig<P>, op_func: F) -> Result<(), Box<dyn Error>>
@@ -319,6 +336,8 @@ where
 ///
 /// # Examples
 ///
+/// Change a read-only global variable's value to 0xdeadbeef.
+///
 /// ```no_run
 /// static EXAMPLE: u64 = 0x00;
 ///
@@ -399,6 +418,9 @@ pub enum AllocFlags {
 /// * `flags` - The AllocFlags to use.
 ///
 /// # Examples
+///
+/// Allocate a new chunk of memory and tell Rust to treat it as
+/// an array of u8 with four elements:
 ///
 /// ```no_run
 /// fn main() -> Result<(), Box<dyn std::error::Error>> {
