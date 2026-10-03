@@ -231,10 +231,10 @@ where
     let mut chunk_size = config.size;
 
     if let Some(align_bits) = config.align_to {
-        let adjustment = align_to(protect_ptr, align_bits, config.size);
+        let adjustment = align_chunk(protect_ptr, align_bits, config.size);
 
         protect_ptr = adjustment.new_ptr;
-        chunk_size = adjustment.size_to_modify;
+        chunk_size = adjustment.new_size;
     }
 
     let mut orig_prot: Option<Prot> = None;
@@ -356,10 +356,10 @@ pub fn protect<P>(
     let mut chunk_size = size;
 
     if let Some(align_bits) = align_with {
-        let adjustment = align_to(target_ptr.cast(), align_bits, chunk_size);
+        let adjustment = align_chunk(target_ptr.cast(), align_bits, chunk_size);
 
         target_ptr = adjustment.new_ptr;
-        chunk_size = adjustment.size_to_modify;
+        chunk_size = adjustment.new_size;
     }
 
     #[cfg(unix)]
@@ -437,7 +437,41 @@ pub fn alloc<P>(
     result
 }
 
-fn align_to<P>(pointer: *mut P, bits: usize, chunk_size: usize) -> AlignToOutput<P> {
+/// align_chunk aligns a pointer to an arbitrary chunk of memory according
+/// to the specified bits. It returns a new pointer and the size of the
+/// the new chunk (that is: the original chunk's size plus the length
+/// between the aligned pointer and the original pointer).
+///
+/// # Arguments
+///
+/// * `pointer` - A pointer to a chunk of memory.
+/// * `bits` - The bits to align the pointer to (usually the system's
+///   page size - e.g., 4096 or 0x1000).
+/// * `chunk_size` - The size of the chunk that pointer is pointing at.
+///
+/// # Examples
+///
+/// Align an 8-byte chunk to a boundary of 4096 bits:
+///
+/// ```no_run
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let mut example: u64 = 0x8badf00d;
+///
+///     let aligned = mrevise::align_chunk(std::ptr::addr_of_mut!(example), 4096, 8);
+///
+///     // This outputs:
+///     // old ptr: 0x00002bd810fe49e8 | new ptr: 0x00002bd810fe4000 | new chunk size: 2544
+///     eprintln!(
+///         "old ptr: {:#x?} | new ptr: {:#x?} | new chunk size: {}",
+///         std::ptr::addr_of!(example),
+///         aligned.new_ptr,
+///         aligned.new_size
+///     );
+///
+///     Ok(())
+/// }
+/// ```
+pub fn align_chunk<P>(pointer: *mut P, bits: usize, chunk_size: usize) -> AlignedChunk<P> {
     let current_addr = pointer.addr();
 
     let new_addr = current_addr & !(bits - 1);
@@ -446,24 +480,33 @@ fn align_to<P>(pointer: *mut P, bits: usize, chunk_size: usize) -> AlignToOutput
 
     match new_addr {
         new_addr if current_addr == new_addr => {
-            return AlignToOutput {
+            return AlignedChunk {
                 new_ptr: pointer,
-                size_to_modify: chunk_size,
+                new_size: chunk_size,
             };
         }
         new_addr if current_addr > new_addr => diff = current_addr - new_addr,
         _ => diff = new_addr - current_addr,
     };
 
-    AlignToOutput {
+    AlignedChunk {
         new_ptr: new_addr as *mut P,
-        size_to_modify: diff + chunk_size,
+        new_size: diff + chunk_size,
     }
 }
 
-struct AlignToOutput<P> {
-    new_ptr: *mut P,
-    size_to_modify: usize,
+/// AlignedChunk represents a memory chunk that has been aligned to
+/// a bit width and the chunk's new size. The new size is the sum of
+/// the old chunk's size plus the length from the aligned chunk pointer
+/// to the old pointer.
+pub struct AlignedChunk<P> {
+    /// new_ptr is the pointer to the chunk after it
+    /// has been aligned.
+    pub new_ptr: *mut P,
+
+    /// new_size is the size of the chunk after its pointer
+    /// has been aligned.
+    pub new_size: usize,
 }
 
 fn last_error(prefix: &str) -> std::io::Error {
