@@ -13,10 +13,21 @@ pub mod windows;
 ///
 /// It is a wrapper for the objects_with_options function.
 ///
-/// ## Safety
+/// # Safety
 ///
 /// This function is unsafe because it relies on OS APIs that
 /// provide no memory safety assurances.
+///
+///
+/// # Examples
+///
+/// ```no_run
+/// let objects = unsafe { mmor::objects().unwrap() };
+///
+/// for obj in objects.iter() {
+///     println!("{obj}");
+/// }
+/// ```
 pub unsafe fn objects() -> Result<Objects, Box<dyn Error>> {
     unsafe {
         objects_with_options(ObjectLookupOptions {
@@ -39,15 +50,27 @@ pub struct ObjectLookupOptions {
 /// objects_with_otions enumerates the memory-mapped objects in the
 /// current process.
 ///
-/// ## Safety
+/// # Safety
 ///
 /// This function is unsafe because it relies on OS APIs that
 /// provide no memory safety assurances.
 ///
-/// ## Arguments
+/// # Arguments
 ///
 /// * `options` - A struct that customizes the behavior of
 ///   this function.
+///
+/// # Examples
+///
+/// ```no_run
+/// let objects = unsafe { mmor::objects_with_options(ObjectLookupOptions{
+///     skip_invalid_handles: false,
+/// }).unwrap() };
+///
+/// for obj in objects.iter() {
+///     println!("{obj}");
+/// }
+/// ```
 pub unsafe fn objects_with_options(
     options: ObjectLookupOptions,
 ) -> Result<Objects, Box<dyn Error>> {
@@ -121,7 +144,7 @@ pub struct Symbolizer {
 impl Symbolizer {
     /// new instantiates a new instance of a Symbolizer.
     ///
-    /// ## Safety
+    /// # Safety
     ///
     /// This function is unsafe because it relies on OS APIs that
     /// provide no memory safety assurances.
@@ -143,14 +166,24 @@ impl Symbolizer {
     /// by_addr looks up the symbol corresponding to the specified
     /// memory address.
     ///
-    /// ## Safety
+    /// # Safety
     ///
     /// This function is unsafe because it relies on OS APIs that
     /// provide no memory safety assurances.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// * `addr` - The memory address of the symbol to lookup.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// let symbolizer = mmor::Symbolizer::new()?;
+    ///
+    /// let info = symbolizer.by_addr(0xdeadbeef)?;
+    ///
+    /// eprintln!("symbol info: {info}");
+    /// ```
     pub unsafe fn by_addr(&self, addr: usize) -> Result<SymInfo, Box<dyn Error>> {
         #[cfg(unix)]
         unsafe {
