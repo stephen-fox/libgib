@@ -16,7 +16,8 @@ version = "0.1.2"
 authors = ["Stephen Fox Jr. <stephen.j.fox.jr@gmail.com>"]
 license = "MIT"
 description = """
-libgib is a collection of Rust libraries that provide an OS-agnostic
-API for manipulating process memory on Unix-like and Windows operating
-systems using minimal external dependencies."""
+libgib is a collection of Rust libraries that support building programs
+that run inside other programs via code injection. libgib's libraries
+provide OS-agnostic tooling to help locate code and data in the current
+process and manipulate the underlying memory."""
 repository = "https://codeberg.org/stephen-fox/libgib"

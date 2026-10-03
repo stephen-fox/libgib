@@ -1,13 +1,16 @@
 # libgib
 
-libgib is a collection of Rust libraries that provide an OS-agnostic
-API for manipulating process memory on Unix-like and Windows operating
-systems using minimal external dependencies. The main goal of the project
-is to help facilitate process injection to aid in reverse engineering.
-For example: overwriting a external function pointer in a process' global
-offset table to point at a proxy function written in Rust.
+libgib is a collection of Rust libraries that support building programs
+that run inside other programs via code injection. libgib's libraries
+provide OS-agnostic tooling to help locate code and data in the current
+process and manipulate the underlying memory.
 
-## Overview
+The main goal of libgib is to make Rust usable for dynamic analysis
+when reverse engineering other programs. For example: by overwriting
+an external function pointer in a process' global offset table to
+point at a proxy function written in Rust.
+
+## Libraries
 
 - `afnative` - afnative provides an abstraction for operating-system-specific
   sockets like Unix sockets and Windows named pipes
@@ -21,12 +24,15 @@ offset table to point at a proxy function written in Rust.
   table without hardcoding each entry's offset in the table in your program
 - `mrevise` - mrevise abstracts operating on the current process' memory,
   including: modifying memory protections (permissions), allocating memory,
-  and finding byte patterns. This library is a fork of Jacob Read's 'mem'
+  and finding byte patterns. This library is a fork of Jacob Read's [mem][pr]
   crate from their Pocket Relay project
 
 ## Examples
 
-Refer to the [examples/](examples/) directory for examples.
+For examples of composing libgib's libraries together, refer to the
+[examples/](examples/) directory.
+
+For individual library API examples, refer to each library's rustdoc.
 
 ## Special thanks
 
