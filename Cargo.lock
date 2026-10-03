@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "afnative"
-version = "0.1.0"
+version = "0.1.3"
 
 [[package]]
 name = "aomlib"
@@ -41,7 +41,7 @@ checksum = "e2931af7e13dc045d8e9d26afccc6fa115d64e115c9c84b1166288b46f6782c2"
 
 [[package]]
 name = "dlrkit"
-version = "0.1.0"
+version = "0.1.3"
 dependencies = [
  "example-lib",
 ]
@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "mmor"
-version = "0.1.0"
+version = "0.1.3"
 dependencies = [
  "dlrkit",
  "libc",
@@ -107,7 +107,7 @@ dependencies = [
 
 [[package]]
 name = "mrevise"
-version = "0.1.0"
+version = "0.1.3"
 
 [[package]]
 name = "num_cpus"
