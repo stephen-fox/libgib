@@ -9,18 +9,49 @@ pub mod windows;
 /// find_pattern attempts to find a matching pattern anywhere between
 /// the start and end offsets.
 ///
-/// ## Safety
+/// This function was originally written by Jacob T. Read (jacobtread)
+/// for their PocketRelay project (Copyright (c) 2023 - 2024 Jacobtread).
+///
+/// # Safety
 ///
 /// This function is unsafe because it interacts with memory that may be
 /// owned by other code or memory that is being operated on concurrently
 /// by another thread.
 ///
-/// ## Arguments
+/// # Arguments
 ///
 /// * `start_offset` - The address to start matching from.
 /// * `end_offset`   - The address to stop matching at.
-/// * `mask`         - The mask to use when matching opcodes.
+/// * `mask`         - The mask to use when matching data. Refer to the
+///   compare_mask function's rustdoc for an explanation of the mask string.
 /// * `bytes`        - The bytes to match against.
+///
+/// # Examples
+///
+/// ```no_run
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let example: u64 = 0xdeadbeef;
+///
+///     let ptr = std::ptr::addr_of!(example) as usize;
+///
+///     eprintln!("ptr: {ptr:#x}");
+///
+///     let result = unsafe {
+///         mrevise::find_pattern(ptr, ptr + 0xFF, "????xxxx", &[0xde, 0xad, 0xbe, 0xef])
+///     };
+///
+///     match result {
+///         Some(found_ptr) => {
+///             let value = unsafe { *(found_ptr as *const u64) };
+///
+///             eprintln!("found target at: {found_ptr:#x?} - value: {value:#x}");
+///         }
+///         None => eprintln!("failed to find target :("),
+///     }
+///
+///     Ok(())
+/// }
+/// ```
 pub unsafe fn find_pattern(
     start_offset: usize,
     end_offset: usize,
@@ -38,16 +69,23 @@ pub unsafe fn find_pattern(
 /// compare_mask compares the bytes after the provided address using
 /// the provided pattern.
 ///
-/// ## Safety
+/// This function was originally written by Jacob T. Read (jacobtread)
+/// for their PocketRelay project (Copyright (c) 2023 - 2024 Jacobtread).
+///
+/// # Safety
 ///
 /// This function is unsafe because it interacts with memory that may be
 /// owned by other code or memory that is being operated on concurrently
 /// by another thread.
 ///
-/// ## Arguments
+/// # Arguments
 ///
 /// * `addr`  - The address to start matching from.
-/// * `mask`  - The mask to use when matching opcodes.
+/// * `mask`  - The mask to use when matching data. This string must be
+///   the same length as the bytes argument. It can consist of a wildcard
+///   character ("?") which indicates any byte can match at the given
+///   position or a must-match character (this can be any character other
+///   than "?", but is typically just "x").
 /// * `bytes` - The bytes to match against.
 pub unsafe fn compare_mask(addr: *const u8, mask: &'static str, bytes: &'static [u8]) -> bool {
     mask.chars()
@@ -137,23 +175,23 @@ impl std::fmt::Display for Prot {
     }
 }
 
-/// mop handles the common toil involved in operating on a memory chunk,
-/// such as setting the chunk's protection settings before and after
-/// operating on it, aligning the chunk's boundaries to a certain bit
-/// width, and reading from and writing to the chunk.
+/// mop (memory operation) handles the common toil involved in operating
+/// on a memory chunk, such as setting the chunk's protection settings
+/// before and after operating on it, aligning the chunk's boundaries to
+/// a certain bit width, and reading from and writing to the chunk.
 ///
 /// The function works by first applying the config.prot_before memory
 /// protection setting to the target memory chunk. The op_func closure
 /// is then executed. After op_func finishes running, config.prot_after
 /// is applied to the memory chunk.
 ///
-/// ## Safety
+/// # Safety
 ///
 /// This function is unsafe because it interacts with memory that may be
 /// owned by other code or memory that is being operated on concurrently
 /// by another thread.
 ///
-/// ## Arguments
+/// # Arguments
 ///
 /// * `config` - A struct that specifies the target memory chunk's
 ///   boundaries and this function's behavior.
@@ -163,6 +201,27 @@ impl std::fmt::Display for Prot {
 ///   optional alignment has been applied. The closure can return
 ///   a result with an error to communicate an error condition back
 ///   to the code that invoked mop.
+///
+/// # Examples
+///
+/// ```no_run
+/// unsafe {
+///     mrevise::mop(mrevise::MopConfig{
+///         mrevise::MopConfig {
+///             pointer: 0xdeadbeef as *const u64,
+///             size: 9001,
+///             align_to: Some(4096),
+///             prot_before: mrevise::MaybeProt::ChangeTo(mrevise::Prot::ReadWrite),
+///             prot_after: mrevise::MaybeProt::ChangeTo(mrevise::Prot::Read),
+///         },
+///         |addr| {
+///             *addr = 0x8badf00d;
+///
+///             Ok(())
+///         }
+///     })
+/// };
+/// ```
 #[inline]
 pub unsafe fn mop<F, P>(config: MopConfig<P>, op_func: F) -> Result<(), Box<dyn Error>>
 where
@@ -243,13 +302,13 @@ where
 /// It provides identical functionality to the mprotect(2) system call
 /// on Unix-like systems and the Windows VirtualProtect function.
 ///
-/// ## Safety
+/// # Safety
 ///
 /// This function is unsafe because it interacts with memory that may be
 /// owned by other code or memory that is being operated on concurrently
 /// by another thread.
 ///
-/// ## Arguments
+/// # Arguments
 ///
 /// * `pointer` - The memory address to operate on.
 /// * `size` - The size of the memory chunk to operate on.
@@ -257,6 +316,36 @@ where
 /// * `allign_with` - An optional boundary to align the chunk to. This is
 ///   typically be set to the platform's page size, which is commonly (but
 ///   not always!) 4096 bits. Or, in other words: `Some(4096)`
+///
+/// # Examples
+///
+/// ```no_run
+/// static EXAMPLE: u64 = 0x00;
+///
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let ptr = std::ptr::addr_of!(EXAMPLE) as *mut u64;
+///
+///     // This will output: 0x0.
+///     eprintln!("value before: {EXAMPLE:#x?}");
+///
+///     // If we do not change the memory protection
+///     // of the EXAMPLE global variable, this program
+///     // will segfault when updating it.
+///     mrevise::protect(
+///         ptr,
+///         std::mem::size_of::<u64>(),
+///         mrevise::Prot::ReadWrite,
+///         Some(4096),
+///     )?;
+///
+///     unsafe { *ptr = 0xdeadbeef };
+///
+///     // This will output: 0xdeadbeef.
+///     eprintln!("value after: {EXAMPLE:#x?}");
+///
+///     Ok(())
+/// }
+/// ```
 pub fn protect<P>(
     pointer: *mut P,
     size: usize,
@@ -301,13 +390,38 @@ pub enum AllocFlags {
 /// It provides identical functionality to the mmap(2) system call
 /// on Unix-like systems and the Windows VirtualAlloc function.
 ///
-/// ## Arguments
+/// # Arguments
 ///
 /// * `addr` - An optional address to allocate memory on top of.
 ///   If None, then a new chunk is allocated.
 /// * `size` - The size of the allocation in bytes.
 /// * `prot` - The memory protection settings to apply to the new chunk.
 /// * `flags` - The AllocFlags to use.
+///
+/// # Examples
+///
+/// ```no_run
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let mut chunk = unsafe {
+///         *mrevise::alloc::<[u8; 4]>(
+///             None,
+///             4,
+///             mrevise::Prot::ReadWrite,
+///             mrevise::AllocFlags::Default,
+///         )?
+///     };
+///
+///     chunk[0] = 0xde;
+///     chunk[1] = 0xad;
+///     chunk[2] = 0xbe;
+///     chunk[3] = 0xef;
+///
+///     // This outputs: [0xde, 0xad, 0xbe, 0xef].
+///     eprintln!("{chunk:#x?}");
+///
+///     Ok(())
+/// }
+/// ```
 pub fn alloc<P>(
     addr: Option<*mut P>,
     size: usize,
