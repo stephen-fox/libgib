@@ -13,7 +13,7 @@ pub mod unix;
 #[cfg(windows)]
 pub mod windows;
 
-/// OpenMode specifies the behavior for the Dl::open_mode function.
+/// OpenMode specifies the options for the Dl::open_mode function.
 pub enum OpenMode {
     Unix(c_int),
     Win32(u32),
@@ -31,6 +31,9 @@ impl std::fmt::Display for OpenMode {
 }
 
 /// Dl represents a dynamic linker object such as a library.
+///
+/// Libraries can be loaded using the Dl::open and Dl::open_mode
+/// associated functions.
 pub struct Dl {
     hnd: *mut c_void,
 }
@@ -43,10 +46,35 @@ impl Dl {
     /// a .dll on Windows. It is a wrapper for the open_mode function,
     /// refer to that function's documentation for more details.
     ///
-    /// ## Safety
+    /// # Safety
     ///
     /// This function is unsafe because it relies on OS APIs that
     /// provide no memory safety assurances.
+    ///
+    /// # Examples
+    ///
+    /// Load a shared library and write the library handle's
+    /// address to stderr:
+    ///
+    /// ```no_run
+    /// const LIBRARY_PATH: &str = {
+    ///     if cfg!(target_os = "windows") {
+    ///         "target\\debug\\deps\\example_lib.dll"
+    ///     } else if cfg!(any(target_os = "macos", target_os = "ios")) {
+    ///         "target/debug/deps/libexample_lib.dylib"
+    ///     } else {
+    ///         "target/debug/deps/libexample_lib.so"
+    ///     }
+    /// };
+    ///
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let lib = unsafe { dlrkit::Dl::open(Some(LIBRARY_PATH))? };
+    ///
+    ///     eprintln!("library pointer: {:#x?}", unsafe { lib.handle() });
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
     pub unsafe fn open<P: AsRef<Path>>(file: Option<P>) -> Result<Self, Box<dyn Error>> {
         #[cfg(unix)]
         unsafe {
@@ -59,15 +87,18 @@ impl Dl {
         }
     }
 
-    /// open loads a library such as a .so file on Unix-like systems or
-    /// a .dll on Windows.
+    /// open_mode loads a library such as a .so file on Unix-like systems
+    /// or a .dll on Windows according to the options specified by the
+    /// OpenMode type. Users should generally use the Dl::open function
+    /// instead. The purpose of open_mode is to expose platform-specific
+    /// dynamic linker configuration.
     ///
-    /// ## Safety
+    /// # Safety
     ///
     /// This function is unsafe because it relies on OS APIs that
     /// provide no memory safety assurances.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// * file - The path to the dynamic library to load. If set to
     ///   None a pointer to the process' executable will be returned.
@@ -99,14 +130,44 @@ impl Dl {
 
     /// sym looks for a symbol in the current object by its name.
     ///
-    /// ## Safety
+    /// # Safety
     ///
     /// This function is unsafe because it relies on OS APIs that
     /// provide no memory safety assurances.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// * `symbol_name` - The name of the symbol to lookup.
+    ///
+    /// # Examples
+    ///
+    /// Load a shared library, create a function pointer for
+    /// the library's "add" function, and execute the add
+    /// function:
+    ///
+    /// ```no_run
+    /// const LIBRARY_PATH: &str = {
+    ///     if cfg!(target_os = "windows") {
+    ///         "target\\debug\\deps\\example_lib.dll"
+    ///     } else if cfg!(any(target_os = "macos", target_os = "ios")) {
+    ///         "target/debug/deps/libexample_lib.dylib"
+    ///     } else {
+    ///         "target/debug/deps/libexample_lib.so"
+    ///     }
+    /// };
+    ///
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let lib = unsafe { dlrkit::Dl::open(Some(LIBRARY_PATH))? };
+    ///
+    ///     let add = unsafe { lib.sym::<fn(left: u64, right: u64) -> u64>("add")? };
+    ///
+    ///     // Outputs:
+    ///     // add result: 0x41
+    ///     eprintln!("add result: {}", add(0x40, 1));
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
     pub unsafe fn sym<T>(&self, symbol_name: &str) -> Result<Sym<'_, T>, Box<dyn Error>> {
         // This check comes from dlopen2. It ensures that T is
         // the same size as a pointer.
@@ -141,7 +202,7 @@ impl Dl {
 
     /// close unloads the underlying memory-mapped object.
     ///
-    /// ## Safety
+    /// # Safety
     ///
     /// This function is unsafe because it relies on OS APIs that
     /// provide no memory safety assurances.
@@ -159,18 +220,20 @@ impl Dl {
 }
 
 /// Sym is a safe wrapper around a symbol obtained from `Dl`.
+/// Users should use the Dl::sym method instead of invoking
+/// this type's "new" associated function directly.
 ///
 /// This is the most generic type, valid for obtaining functions,
 /// references and pointers. It does not accept null value of
 /// the library symbol. Other types may provide more specialized
 /// functionality better for some use cases.
 ///
-/// This originally appeared in the dlopen2 Rust library, maintained
-/// by OpenByteDev.
+/// This code originally appeared in the dlopen2 Rust library,
+/// maintained by OpenByteDev.
 ///
-/// Copyright (c) 2017 Szymon Wieloch
-/// Copyright (C) 2019 Ahmed Masud <ahmed.masud@saf.ai>
-/// Copyright (C) 2022 OpenByte <development.openbyte@gmail.com>
+/// * Copyright (c) 2017 Szymon Wieloch
+/// * Copyright (C) 2019 Ahmed Masud <ahmed.masud@saf.ai>
+/// * Copyright (C) 2022 OpenByte <development.openbyte@gmail.com>
 #[derive(Debug, Clone, Copy)]
 pub struct Sym<'lib, T: 'lib> {
     symbol: T,
