@@ -18,14 +18,24 @@ pub mod windows;
 /// This function is unsafe because it relies on OS APIs that
 /// provide no memory safety assurances.
 ///
-///
 /// # Examples
 ///
 /// ```no_run
-/// let objects = unsafe { mmor::objects().unwrap() };
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let objects = unsafe { mmor::objects() }?;
 ///
-/// for obj in objects.iter() {
-///     println!("{obj}");
+///     // Outputs:
+///     // object: addr: 0x4855ffd00000 | name: 'tmp' | path: '/home/libgib/src/libgib/target/debug/tmp'
+///     // object: addr: 0x485682231000 | name: 'libthr.so.3' | path: '/lib/libthr.so.3'
+///     // object: addr: 0x485682dd6000 | name: 'libgcc_s.so.1' | path: '/lib/libgcc_s.so.1'
+///     // object: addr: 0x485685800000 | name: 'libc.so.7' | path: '/lib/libc.so.7'
+///     // object: addr: 0x4856867e0000 | name: 'libsys.so.7' | path: '/lib/libsys.so.7'
+///     // object: addr: 0x512197b97000 | name: 'ld-elf.so.1' | path: '/libexec/ld-elf.so.1'
+///     for obj in objects.objects.iter() {
+///         eprintln!("object: {obj}");
+///     }
+///
+///     Ok(())
 /// }
 /// ```
 pub unsafe fn objects() -> Result<Objects, Box<dyn Error>> {
@@ -48,7 +58,8 @@ pub struct ObjectLookupOptions {
 }
 
 /// objects_with_otions enumerates the memory-mapped objects in the
-/// current process.
+/// current process according to the supplied ObjectLookupOptions.
+/// Users should generally use the objects function instead.
 ///
 /// # Safety
 ///
@@ -59,18 +70,6 @@ pub struct ObjectLookupOptions {
 ///
 /// * `options` - A struct that customizes the behavior of
 ///   this function.
-///
-/// # Examples
-///
-/// ```no_run
-/// let objects = unsafe { mmor::objects_with_options(ObjectLookupOptions{
-///     skip_invalid_handles: false,
-/// }).unwrap() };
-///
-/// for obj in objects.iter() {
-///     println!("{obj}");
-/// }
-/// ```
 pub unsafe fn objects_with_options(
     options: ObjectLookupOptions,
 ) -> Result<Objects, Box<dyn Error>> {
