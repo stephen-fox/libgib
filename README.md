@@ -12,20 +12,28 @@ point at a proxy function written in Rust.
 
 ## Libraries
 
-- `afnative` - afnative provides an abstraction for operating-system-specific
-  sockets like Unix sockets and Windows named pipes
-- `dlrkit` - dlrkit provides an API for interacting with the dynamic linker
-  and loading libraries at runtime such as .so files and .dll files. Useful
-  for executing code from external libraries using the C ABI
-- `mmor` - mmor provides an OS-agnostic API for enumerating memory-mapped
-  objects in the current process and resolving a symbol's address to its
-  name and parent library. Useful for finding the addresses of libraries
-  or the process' executable, as well as mapping the process global offset
-  table without hardcoding each entry's offset in the table in your program
-- `mrevise` - mrevise abstracts operating on the current process' memory,
-  including: modifying memory protections (permissions), allocating memory,
-  and finding byte patterns. This library is a fork of Jacob Read's [mem][pr]
-  crate from their Pocket Relay project
+- `afnative` ([docs][afnative-docs]) - afnative provides an abstraction
+  for operating-system-specific sockets like Unix sockets and Windows
+  named pipes
+- `dlrkit` ([docs][dlrkit-docs]) - dlrkit provides an API for interacting
+  with the dynamic linker and loading libraries at runtime such as .so
+  files and .dll files. Useful for executing code from external libraries
+  using the C ABI
+- `mmor` ([docs][mmor-docs]) - mmor provides an API for enumerating
+  memory-mapped objects in the current process and resolving a symbol's
+  address to its name and parent library. Useful for finding the addresses
+  of libraries or the process' executable, as well as mapping the process
+  global offset table without hardcoding each entry's offset in the table
+  in your program
+- `mrevise` ([docs][mrevise-docs]) - mrevise abstracts operating on the
+  current process' memory, including: modifying memory protections (permissions),
+  allocating memory, and finding byte patterns. This library is a fork of
+  Jacob Read's [mem][pr] crate from their Pocket Relay project
+
+[afnative-docs]: https://docs.rs/afnative/latest/
+[dlrkit-docs]: https://docs.rs/dlrkit/latest/
+[mmor-docs]: https://docs.rs/mmor/latest/
+[mrevise-docs]: https://docs.rs/mrevise/latest/
 
 ## Examples
 
