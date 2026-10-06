@@ -207,7 +207,7 @@ impl std::fmt::Display for Prot {
 ///
 /// # Examples
 ///
-/// Change a read-only global variable's value to 0xdeadbeef.
+/// Change a read-only global variable's value to 0xdeadbeef:
 ///
 /// ```no_run
 /// static EXAMPLE: u64 = 0x00;
@@ -336,7 +336,7 @@ where
 ///
 /// # Examples
 ///
-/// Change a read-only global variable's value to 0xdeadbeef.
+/// Change a read-only global variable's value to 0xdeadbeef:
 ///
 /// ```no_run
 /// static EXAMPLE: u64 = 0x00;
